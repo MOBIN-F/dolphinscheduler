@@ -19,6 +19,7 @@ import {
   defineComponent,
   getCurrentInstance,
   onMounted,
+  ref,
   toRefs,
   withKeys
 } from 'vue'
@@ -79,6 +80,11 @@ const login = defineComponent({
 
     cookies.set('language', localesStore.getLocales, { path: '/' })
 
+    // Render the login form only after the login options are loaded, so that the form does not flash
+    // when only OIDC login is enabled
+    const loginOptionsLoaded = ref(false)
+    let oidcProvidersLoading: Promise<void> = Promise.resolve()
+
     onMounted(async () => {
       if (state.ssoRedirecting) {
         await handleRedirect()
@@ -87,8 +93,10 @@ const login = defineComponent({
         }
         // Redirect failed, fall back to the normal login form
         handleGetOAuth2Provider()
-        handleGetOidcProviders()
+        oidcProvidersLoading = handleGetOidcProviders()
       }
+      await oidcProvidersLoading.catch(() => undefined)
+      loginOptionsLoaded.value = true
       const ssoLoginUrlRes = await ssoLoginUrl()
       state.loginForm.ssoLoginUrl = ssoLoginUrlRes
       if (state.loginForm.ssoLoginUrl) {
@@ -108,7 +116,7 @@ const login = defineComponent({
 
     if (!state.ssoRedirecting) {
       handleGetOAuth2Provider()
-      handleGetOidcProviders()
+      oidcProvidersLoading = handleGetOidcProviders()
     }
     return {
       t,
@@ -119,6 +127,7 @@ const login = defineComponent({
       trim,
       oauth2Providers,
       oidcProviders,
+      loginOptionsLoaded,
       gotoOAuth2Page
     }
   },
@@ -155,7 +164,12 @@ const login = defineComponent({
           </div>
           <div
             class={styles['form-model']}
-            v-show={this.loginForm.ssoLoginUrl.length === 0}
+            v-show={
+              this.loginOptionsLoaded &&
+              this.loginForm.ssoLoginUrl.length === 0 &&
+              // Only OIDC login is allowed when OIDC authentication is enabled
+              this.oidcProviders.length === 0
+            }
           >
             <NForm rules={this.rules} ref='loginFormRef'>
               <NFormItem
@@ -219,10 +233,10 @@ const login = defineComponent({
               </NButton>
             </a>
           </div>
-          {(this.oauth2Providers.length > 0 ||
-            this.oidcProviders.length > 0) && (
-            <NDivider>{this.t('login.loginWithOAuth2')}</NDivider>
-          )}
+          {this.oidcProviders.length === 0 &&
+            this.oauth2Providers.length > 0 && (
+              <NDivider>{this.t('login.loginWithOAuth2')}</NDivider>
+            )}
 
           <NSpace class={styles['oauth2-provider']} justify='center'>
             {this.oauth2Providers?.map((e: OAuth2Provider) => {

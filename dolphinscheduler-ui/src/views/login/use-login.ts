@@ -77,11 +77,10 @@ export function useLogin(state: any) {
     })
   }
 
-  const handleGetOidcProviders = () => {
+  const handleGetOidcProviders = () =>
     getOidcProviders().then((res: Array<OidcProvider> | []) => {
       oidcProviders.value = res
     })
-  }
 
   const oauth2Providers = ref<Array<OAuth2Provider> | []>([])
   const oidcProviders = ref<Array<OidcProvider> | []>([])
