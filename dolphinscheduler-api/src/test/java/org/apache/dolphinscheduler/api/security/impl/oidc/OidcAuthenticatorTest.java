@@ -438,13 +438,13 @@ public class OidcAuthenticatorTest {
         @SuppressWarnings("unchecked")
         List<String> groups3 = (List<String>) extractGroupsMethod.invoke(oidcAuthenticator, providerConfig2,
                 idTokenClaims1, userInfo1);
-        Assertions.assertTrue(groups3.isEmpty());
+        Assertions.assertNull(groups3);
 
         @SuppressWarnings("unchecked")
         List<String> groups4 =
                 (List<String>) extractGroupsMethod.invoke(oidcAuthenticator, providerConfig, idTokenClaims2,
                         new UserInfo(subject));
-        Assertions.assertTrue(groups4.isEmpty());
+        Assertions.assertNull(groups4);
     }
 
     @Test
@@ -649,6 +649,65 @@ public class OidcAuthenticatorTest {
             Assertions.assertEquals(UserType.ADMIN_USER, result.getUserType());
             verify(usersService).updateUser(any(User.class));
         }, Collections.singletonList("admin-group"), true, true, builder -> builder.issuer("http://fake-issuer.com"));
+    }
+
+    @Test
+    public void testLogin_ExistingUserTypeKeptWhenAdminGroupMappingNotConfigured() throws Exception {
+        String state = providerId + ":" + UUID.randomUUID();
+        when(session.getAttribute(Constants.SSO_LOGIN_USER_STATE)).thenReturn(state);
+        mockOidcConfiguration(providerId, true, null);
+
+        // Existing user was promoted to ADMIN manually, should not be reset to GENERAL
+        User existingUser = new User();
+        existingUser.setUserName(username);
+        existingUser.setUserType(UserType.ADMIN_USER);
+        when(usersService.getUserByUserName(username)).thenReturn(existingUser);
+
+        executeLoginWithMocks(() -> {
+            User result = oidcAuthenticator.login(state, code);
+            Assertions.assertNotNull(result);
+            Assertions.assertEquals(UserType.ADMIN_USER, result.getUserType());
+            verify(usersService, never()).updateUser(any(User.class));
+        }, Collections.singletonList("other-group"), true, true, "http://fake-issuer.com");
+    }
+
+    @Test
+    public void testLogin_ExistingUserTypeKeptWhenGroupsClaimMissing() throws Exception {
+        String state = providerId + ":" + UUID.randomUUID();
+        when(session.getAttribute(Constants.SSO_LOGIN_USER_STATE)).thenReturn(state);
+        mockOidcConfiguration(providerId, true, Collections.singletonList("admin-group"));
+
+        User existingUser = new User();
+        existingUser.setUserName(username);
+        existingUser.setUserType(UserType.ADMIN_USER);
+        when(usersService.getUserByUserName(username)).thenReturn(existingUser);
+
+        executeLoginWithMocks(() -> {
+            User result = oidcAuthenticator.login(state, code);
+            Assertions.assertNotNull(result);
+            Assertions.assertEquals(UserType.ADMIN_USER, result.getUserType());
+            verify(usersService, never()).updateUser(any(User.class));
+        }, null, true, true, "http://fake-issuer.com");
+    }
+
+    @Test
+    public void testLogin_ExistingUserRoleDowngraded() throws Exception {
+        String state = providerId + ":" + UUID.randomUUID();
+        when(session.getAttribute(Constants.SSO_LOGIN_USER_STATE)).thenReturn(state);
+        mockOidcConfiguration(providerId, true, Collections.singletonList("admin-group"));
+
+        User existingUser = new User();
+        existingUser.setUserName(username);
+        existingUser.setUserType(UserType.ADMIN_USER);
+        when(usersService.getUserByUserName(username)).thenReturn(existingUser);
+        when(usersService.updateUser(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        executeLoginWithMocks(() -> {
+            User result = oidcAuthenticator.login(state, code);
+            Assertions.assertNotNull(result);
+            Assertions.assertEquals(UserType.GENERAL_USER, result.getUserType());
+            verify(usersService).updateUser(any(User.class));
+        }, Collections.singletonList("other-group"), true, true, "http://fake-issuer.com");
     }
 
     @Test
@@ -1001,7 +1060,7 @@ public class OidcAuthenticatorTest {
         @SuppressWarnings("unchecked")
         List<String> groups =
                 (List<String>) extractGroupsMethod.invoke(oidcAuthenticator, providerConfig, idTokenClaims, userInfo);
-        Assertions.assertTrue(groups.isEmpty(), "Groups should be empty when groupsClaim is blank");
+        Assertions.assertNull(groups, "Groups should be null when groupsClaim is blank");
     }
 
     @Test
@@ -1018,7 +1077,7 @@ public class OidcAuthenticatorTest {
         @SuppressWarnings("unchecked")
         List<String> groups =
                 (List<String>) extractGroupsMethod.invoke(oidcAuthenticator, providerConfig, idTokenClaims, userInfo);
-        Assertions.assertTrue(groups.isEmpty(), "Groups should be empty when claims are not list types");
+        Assertions.assertNull(groups, "Groups should be null when claims are not list types");
     }
 
     @Test

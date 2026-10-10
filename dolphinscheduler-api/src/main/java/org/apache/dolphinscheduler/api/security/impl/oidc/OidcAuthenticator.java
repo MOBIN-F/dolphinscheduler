@@ -29,7 +29,6 @@ import org.apache.dolphinscheduler.dao.entity.User;
 
 import java.net.URI;
 import java.security.MessageDigest;
-import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
@@ -144,11 +143,9 @@ public class OidcAuthenticator extends AbstractSsoAuthenticator {
                 if (oidcConfig.getUser().isAutoCreate()) {
                     user = usersService.createUser(userType, username, email);
                 }
-            } else {
-                if (user.getUserType() != userType) {
-                    user.setUserType(userType);
-                    user = usersService.updateUser(user);
-                }
+            } else if (shouldSyncUserType(groups) && user.getUserType() != userType) {
+                user.setUserType(userType);
+                user = usersService.updateUser(user);
             }
 
             return user;
@@ -355,11 +352,16 @@ public class OidcAuthenticator extends AbstractSsoAuthenticator {
         return null;
     }
 
+    /**
+     * Extract groups from the ID token or user info.
+     *
+     * @return the groups, or {@code null} if the groups claim is not configured or not present
+     */
     private List<String> extractGroups(OidcProviderConfig providerConfig, IDTokenClaimsSet idTokenClaims,
                                        UserInfo userInfo) {
         String groupsClaim = providerConfig.getGroupsClaim();
         if (groupsClaim == null || groupsClaim.isEmpty()) {
-            return Collections.emptyList();
+            return null;
         }
 
         Object groupsFromIdToken = idTokenClaims.getClaim(groupsClaim);
@@ -378,7 +380,16 @@ public class OidcAuthenticator extends AbstractSsoAuthenticator {
             }
         }
 
-        return Collections.emptyList();
+        return null;
+    }
+
+    /**
+     * Only sync the user type of an existing user when the admin group mapping is configured and the groups claim is
+     * present, otherwise keep the user type stored in DolphinScheduler.
+     */
+    private boolean shouldSyncUserType(List<String> groups) {
+        List<String> adminGroups = oidcConfig.getUser().getAdminGroupMapping();
+        return adminGroups != null && !adminGroups.isEmpty() && groups != null;
     }
 
     private UserType determineUserType(List<String> groups) {
