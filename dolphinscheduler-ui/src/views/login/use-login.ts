@@ -97,12 +97,26 @@ export function useLogin(state: any) {
       if (authType === 'oauth2' || authType === 'oidc') {
         const sessionId = route.query.sessionId
         if (sessionId) {
-          cookies.set('sessionId', String(sessionId), { path: '/' })
-          const userInfoRes: UserInfoRes = await getUserInfo()
-          await userStore.setUserInfo(userInfoRes)
-          const timezone = userInfoRes.timeZone ? userInfoRes.timeZone : 'UTC'
-          await timezoneStore.setTimezone(timezone)
-          router.push('home')
+          try {
+            await userStore.setSessionId(String(sessionId))
+            cookies.set('sessionId', String(sessionId), { path: '/' })
+            const userInfoRes: UserInfoRes = await getUserInfo()
+            await userStore.setUserInfo(userInfoRes)
+
+            const baseResDir = await queryBaseDir({
+              type: 'FILE'
+            })
+            await userStore.setBaseResDir(baseResDir)
+
+            const timezone = userInfoRes.timeZone ? userInfoRes.timeZone : 'UTC'
+            await timezoneStore.setTimezone(timezone)
+
+            const path = routeStore.lastRoute
+            router.replace({ path: path || 'home' })
+          } catch (err) {
+            state.ssoRedirecting = false
+            window.$message.error(String(err))
+          }
         }
         const error = route.query.error
         if (error) {

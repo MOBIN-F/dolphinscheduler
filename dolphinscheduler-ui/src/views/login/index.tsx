@@ -32,7 +32,8 @@ import {
   useMessage,
   NSpace,
   NDivider,
-  NImage
+  NImage,
+  NSpin
 } from 'naive-ui'
 import { useForm } from './use-form'
 import { useTranslate } from './use-translate'
@@ -40,6 +41,7 @@ import { useLogin } from './use-login'
 import { useLocalesStore } from '@/store/locales/locales'
 import { useThemeStore } from '@/store/theme/theme'
 import cookies from 'js-cookie'
+import { useRoute } from 'vue-router'
 import { ssoLoginUrl } from '@/service/modules/login'
 import type {
   OAuth2Provider,
@@ -51,6 +53,11 @@ const login = defineComponent({
   setup() {
     window.$message = useMessage()
     const { state, t, locale } = useForm()
+    const route = useRoute()
+    // Redirected back from OAuth2/OIDC with a session, skip rendering the login form
+    const authType = route.query.authType
+    state.ssoRedirecting =
+      (authType === 'oauth2' || authType === 'oidc') && !!route.query.sessionId
     const { handleChange } = useTranslate(locale)
     const {
       handleLogin,
@@ -73,6 +80,15 @@ const login = defineComponent({
     cookies.set('language', localesStore.getLocales, { path: '/' })
 
     onMounted(async () => {
+      if (state.ssoRedirecting) {
+        await handleRedirect()
+        if (state.ssoRedirecting) {
+          return
+        }
+        // Redirect failed, fall back to the normal login form
+        handleGetOAuth2Provider()
+        handleGetOidcProviders()
+      }
       const ssoLoginUrlRes = await ssoLoginUrl()
       state.loginForm.ssoLoginUrl = ssoLoginUrlRes
       if (state.loginForm.ssoLoginUrl) {
@@ -90,8 +106,10 @@ const login = defineComponent({
       handleRedirect()
     })
 
-    handleGetOAuth2Provider()
-    handleGetOidcProviders()
+    if (!state.ssoRedirecting) {
+      handleGetOAuth2Provider()
+      handleGetOidcProviders()
+    }
     return {
       t,
       handleChange,
@@ -105,6 +123,17 @@ const login = defineComponent({
     }
   },
   render() {
+    if (this.ssoRedirecting) {
+      return (
+        <div class={styles.container}>
+          <NSpin
+            size='large'
+            description={this.t('login.loggingIn')}
+            themeOverrides={{ color: '#fff', textColor: '#fff' }}
+          />
+        </div>
+      )
+    }
     return (
       <div class={styles.container}>
         <div class={styles['language-switch']}>

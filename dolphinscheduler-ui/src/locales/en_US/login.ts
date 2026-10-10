@@ -23,5 +23,6 @@ export default {
   userPassword_tips: 'Please enter your password',
   login: 'Login',
   loginWithOAuth2: 'Login with OAuth2',
-  ssoLogin: 'SSO Login'
+  ssoLogin: 'SSO Login',
+  loggingIn: 'Logging in...'
 }
