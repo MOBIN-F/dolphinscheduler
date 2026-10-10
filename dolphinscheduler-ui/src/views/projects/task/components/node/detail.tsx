@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { defineComponent, ref, watch, inject, Ref, unref } from 'vue'
+import { defineComponent, ref, watch, inject, Ref, unref, computed } from 'vue'
 import Form from '@/components/form'
 import { useTask } from './use-task'
 import { useTaskNodeStore } from '@/store/project/task-node'
@@ -62,6 +62,11 @@ const NodeDetail = defineComponent({
       }
     )
 
+    // Show the script editor on the left and the other settings on the right
+    const splitPaths = computed(() =>
+      model.taskType === 'SEATUNNEL' ? ['rawScript', 'resourceList'] : []
+    )
+
     expose(formRef)
 
     return () => (
@@ -76,6 +81,7 @@ const NodeDetail = defineComponent({
         layout={{
           xGap: 10
         }}
+        splitPaths={splitPaths.value}
       />
     )
   }

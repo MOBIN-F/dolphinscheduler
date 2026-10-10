@@ -255,6 +255,7 @@ const NodeDetailModal = defineComponent({
         confirmDisabled={props.readonly}
         onCancel={onCancel}
         headerLinks={headerLinks}
+        width={props.data.taskType === 'SEATUNNEL' ? '85%' : undefined}
       >
         <Detail
           ref={detailRef}

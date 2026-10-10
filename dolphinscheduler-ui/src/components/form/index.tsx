@@ -18,7 +18,8 @@
 import { defineComponent, PropType, toRefs, h, unref } from 'vue'
 import { NSpin, NGrid, NForm, NFormItemGi, FormRules } from 'naive-ui'
 import { useForm } from './use-form'
-import type { GridProps, IMeta } from './types'
+import styles from './index.module.scss'
+import type { GridProps, IFormItem, IMeta } from './types'
 
 const props = {
   meta: {
@@ -32,6 +33,11 @@ const props = {
   loading: {
     type: Boolean as PropType<boolean>,
     default: false
+  },
+  // Paths of the elements rendered in the left column, the others are rendered in the right column
+  splitPaths: {
+    type: Array as PropType<string[]>,
+    default: () => []
   }
 }
 
@@ -45,28 +51,55 @@ const Form = defineComponent({
     })
     return { ...toRefs(state) }
   },
-  render(props: { meta: IMeta; layout?: GridProps; loading?: boolean }) {
-    const { loading, layout, meta } = props
+  render(props: {
+    meta: IMeta
+    layout?: GridProps
+    loading?: boolean
+    splitPaths?: string[]
+  }) {
+    const { loading, layout, meta, splitPaths = [] } = props
     const { elements = [], ...restFormProps } = meta
+
+    const renderGrid = (items: IFormItem[]) => (
+      <NGrid {...layout}>
+        {items.map((element) => {
+          const { span = 24, path, widget, ...formItemProps } = element
+
+          return (
+            <NFormItemGi
+              {...formItemProps}
+              span={unref(span) === void 0 ? 24 : unref(span)}
+              path={path}
+              key={path || String(Date.now() + Math.random())}
+            >
+              {h(widget)}
+            </NFormItemGi>
+          )
+        })}
+      </NGrid>
+    )
+
+    const leftElements = elements.filter((element) =>
+      splitPaths.includes(element.path)
+    )
+
     return (
       <NSpin show={loading}>
         <NForm {...restFormProps} rules={meta.rules as FormRules} ref='formRef'>
-          <NGrid {...layout}>
-            {elements.map((element) => {
-              const { span = 24, path, widget, ...formItemProps } = element
-
-              return (
-                <NFormItemGi
-                  {...formItemProps}
-                  span={unref(span) === void 0 ? 24 : unref(span)}
-                  path={path}
-                  key={path || String(Date.now() + Math.random())}
-                >
-                  {h(widget)}
-                </NFormItemGi>
-              )
-            })}
-          </NGrid>
+          {leftElements.length ? (
+            <div class={styles.split}>
+              <div class={styles.left}>{renderGrid(leftElements)}</div>
+              <div class={styles.right}>
+                {renderGrid(
+                  elements.filter(
+                    (element) => !splitPaths.includes(element.path)
+                  )
+                )}
+              </div>
+            </div>
+          ) : (
+            renderGrid(elements)
+          )}
         </NForm>
       </NSpin>
     )

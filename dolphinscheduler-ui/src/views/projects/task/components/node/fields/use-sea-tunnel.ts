@@ -141,6 +141,10 @@ export function useSeaTunnel(model: { [field: string]: any }): IJsonItem[] {
       field: 'rawScript',
       name: t('project.node.script'),
       span: configEditorSpan,
+      props: {
+        language: 'shell',
+        height: 'calc(100vh - 300px)'
+      },
       validate: {
         trigger: ['input', 'trigger'],
         required: model.useCustom,

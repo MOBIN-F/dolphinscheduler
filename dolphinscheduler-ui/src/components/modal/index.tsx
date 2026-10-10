@@ -68,6 +68,9 @@ const props = {
   headerLinks: {
     type: Object as PropType<Ref<Array<LinkOption>>>,
     default: [] as LinkOption[]
+  },
+  width: {
+    type: String as PropType<string>
   }
 }
 
@@ -107,6 +110,7 @@ const Modal = defineComponent({
       <NModal
         v-model={[this.show, 'show']}
         class={styles.container}
+        style={this.width ? { width: this.width } : undefined}
         mask-closable={false}
         auto-focus={this.autoFocus}
         onMaskClick={onMaskClick}
