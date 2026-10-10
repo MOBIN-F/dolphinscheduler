@@ -126,6 +126,20 @@ public class UsersServiceImpl extends BaseServiceImpl implements UsersService {
                            String phone,
                            String queue,
                            int state) throws Exception {
+        return createUser(loginUser, userName, userPassword, email, tenantId, phone, queue, state, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public User createUser(User loginUser,
+                           String userName,
+                           String userPassword,
+                           String email,
+                           int tenantId,
+                           String phone,
+                           String queue,
+                           int state,
+                           UserType userType) throws Exception {
         if (!isAdmin(loginUser)) {
             throw new ServiceException(Status.USER_NO_OPERATION_PERM);
         }
@@ -141,7 +155,7 @@ public class UsersServiceImpl extends BaseServiceImpl implements UsersService {
             throw new ServiceException(Status.TENANT_NOT_EXIST);
         }
 
-        User user = createUser(userName, userPassword, email, tenantId, phone, queue, state);
+        User user = createUser(userName, userPassword, email, tenantId, phone, queue, state, userType);
         log.info("User is created and id is {}.", user.getId());
         return user;
     }
@@ -155,6 +169,19 @@ public class UsersServiceImpl extends BaseServiceImpl implements UsersService {
                            String phone,
                            String queue,
                            int state) {
+        return createUser(userName, userPassword, email, tenantId, phone, queue, state, null);
+    }
+
+    @Override
+    @Transactional
+    public User createUser(String userName,
+                           String userPassword,
+                           String email,
+                           int tenantId,
+                           String phone,
+                           String queue,
+                           int state,
+                           UserType userType) {
         User user = new User();
         Date now = new Date();
 
@@ -164,8 +191,7 @@ public class UsersServiceImpl extends BaseServiceImpl implements UsersService {
         user.setTenantId(tenantId);
         user.setPhone(phone);
         user.setState(state);
-        // create general users, administrator users are currently built-in
-        user.setUserType(UserType.GENERAL_USER);
+        user.setUserType(userType == null ? UserType.GENERAL_USER : userType);
         user.setCreateTime(now);
         user.setUpdateTime(now);
         if (StringUtils.isEmpty(queue)) {
@@ -184,12 +210,6 @@ public class UsersServiceImpl extends BaseServiceImpl implements UsersService {
     @Override
     @Transactional
     public User createUser(UserType userType, String userId, String email) {
-        return createUser(userType, userId, email, -1, "");
-    }
-
-    @Override
-    @Transactional
-    public User createUser(UserType userType, String userId, String email, int tenantId, String queue) {
         User user = new User();
         Date now = new Date();
 
@@ -199,8 +219,8 @@ public class UsersServiceImpl extends BaseServiceImpl implements UsersService {
         user.setUserType(userType);
         user.setCreateTime(now);
         user.setUpdateTime(now);
-        user.setTenantId(tenantId);
-        user.setQueue(queue);
+        user.setTenantId(-1);
+        user.setQueue("");
         user.setState(Flag.YES.getCode());
 
         // save user
@@ -345,6 +365,23 @@ public class UsersServiceImpl extends BaseServiceImpl implements UsersService {
                            String queue,
                            int state,
                            String timeZone) {
+        return updateUser(loginUser, userId, userName, userPassword, email, tenantId, phone, queue, state, timeZone,
+                null);
+    }
+
+    @Override
+    @Transactional
+    public User updateUser(User loginUser,
+                           Integer userId,
+                           String userName,
+                           String userPassword,
+                           String email,
+                           Integer tenantId,
+                           String phone,
+                           String queue,
+                           int state,
+                           String timeZone,
+                           UserType userType) {
 
         if (!canOperator(loginUser, userId)) {
             throw new ServiceException(Status.USER_NO_OPERATION_PERM);
@@ -364,7 +401,8 @@ public class UsersServiceImpl extends BaseServiceImpl implements UsersService {
             }
         }
 
-        if (StringUtils.isNotEmpty(userName)) {
+        // only check the user name when it is changed, so that existing users (e.g. created by SSO) can be updated
+        if (StringUtils.isNotEmpty(userName) && !userName.equals(user.getUserName())) {
 
             if (!CheckUtils.checkUserName(userName)) {
                 throw new ServiceException(Status.REQUEST_PARAMS_NOT_VALID_ERROR, userName);
@@ -399,6 +437,14 @@ public class UsersServiceImpl extends BaseServiceImpl implements UsersService {
 
         if (state == 0 && user.getState() != state && Objects.equals(loginUser.getId(), user.getId())) {
             throw new ServiceException(Status.NOT_ALLOW_TO_DISABLE_OWN_ACCOUNT);
+        }
+
+        if (userType != null && userType != user.getUserType()) {
+            // only admin can change user type, and admin can not downgrade itself
+            if (!isAdmin(loginUser) || Objects.equals(loginUser.getId(), user.getId())) {
+                throw new ServiceException(Status.USER_NO_OPERATION_PERM);
+            }
+            user.setUserType(userType);
         }
 
         if (StringUtils.isNotEmpty(timeZone)) {

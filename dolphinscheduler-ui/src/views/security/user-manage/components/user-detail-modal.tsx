@@ -53,8 +53,15 @@ export const UserModal = defineComponent({
   emits: ['cancel', 'update'],
   setup(props, ctx) {
     const { t } = useI18n()
-    const { state, IS_ADMIN, formRules, onReset, onSave, onSetValues } =
-      useUserDetail()
+    const {
+      state,
+      IS_ADMIN,
+      currentUserId,
+      formRules,
+      onReset,
+      onSave,
+      onSetValues
+    } = useUserDetail()
     const onCancel = () => {
       onReset()
       ctx.emit('cancel')
@@ -81,6 +88,7 @@ export const UserModal = defineComponent({
       t,
       ...toRefs(state),
       IS_ADMIN,
+      currentUserId,
       formRules,
       onCancel,
       onConfirm,
@@ -118,7 +126,7 @@ export const UserModal = defineComponent({
               class='input-username'
               v-model:value={this.formData.userName}
               minlength={3}
-              maxlength={39}
+              maxlength={64}
               placeholder={t('security.user.username_tips')}
             />
           </NFormItem>
@@ -171,6 +179,23 @@ export const UserModal = defineComponent({
               placeholder={t('security.user.phone_empty_tips')}
             />
           </NFormItem>
+          {this.IS_ADMIN && (
+            <NFormItem label={t('security.user.user_type')} path='userType'>
+              <NRadioGroup
+                v-model:value={this.formData.userType}
+                disabled={currentRecord?.id === this.currentUserId}
+              >
+                <NSpace>
+                  <NRadio value='GENERAL_USER' class='radio-user-type-general'>
+                    {t('security.user.ordinary_user')}
+                  </NRadio>
+                  <NRadio value='ADMIN_USER' class='radio-user-type-admin'>
+                    {t('security.user.administrator')}
+                  </NRadio>
+                </NSpace>
+              </NRadioGroup>
+            </NFormItem>
+          )}
           <NFormItem label={t('security.user.state')} path='state'>
             <NRadioGroup v-model:value={this.formData.state}>
               <NSpace>

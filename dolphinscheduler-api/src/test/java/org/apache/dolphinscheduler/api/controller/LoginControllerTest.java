@@ -34,8 +34,10 @@ import org.apache.dolphinscheduler.api.configuration.ApiConfig;
 import org.apache.dolphinscheduler.api.configuration.OAuth2Configuration;
 import org.apache.dolphinscheduler.api.configuration.OAuth2Configuration.OAuth2ClientProperties;
 import org.apache.dolphinscheduler.api.enums.Status;
+import org.apache.dolphinscheduler.api.exceptions.ServiceException;
 import org.apache.dolphinscheduler.api.security.Authenticator;
 import org.apache.dolphinscheduler.api.security.impl.AbstractSsoAuthenticator;
+import org.apache.dolphinscheduler.api.security.impl.oidc.OidcAuthenticator;
 import org.apache.dolphinscheduler.api.service.SessionService;
 import org.apache.dolphinscheduler.api.service.UsersService;
 import org.apache.dolphinscheduler.api.utils.Result;
@@ -55,6 +57,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletRequest;
@@ -100,6 +103,27 @@ public class LoginControllerTest extends AbstractControllerTest {
         Map<String, String> data = (Map<String, String>) result.getData();
         Assertions.assertEquals(Constants.SECURITY_CONFIG_TYPE_PASSWORD, data.get(Constants.SECURITY_CONFIG_TYPE));
         Assertions.assertNotEquals(Constants.SECURITY_CONFIG_TYPE_LDAP, data.get(Constants.SECURITY_CONFIG_TYPE));
+    }
+
+    @Test
+    public void testHandleOidcCallback_UserNotRegistered() throws Exception {
+        String state = "azure:" + UUID.randomUUID();
+        OidcAuthenticator oidcAuthenticator = mock(OidcAuthenticator.class);
+        when(oidcAuthenticator.login(state, "code123"))
+                .thenThrow(new ServiceException(Status.USER_NOT_EXIST, "new.user@example.com"));
+        ApiConfig apiConfig = mock(ApiConfig.class);
+        when(apiConfig.getUiUrl()).thenReturn("https://host/dolphinscheduler/ui");
+        SessionService sessionService = mock(SessionService.class);
+        LoginController controller = new LoginController(sessionService, oidcAuthenticator,
+                mock(UsersService.class), Optional.empty(), Optional.empty(), apiConfig);
+
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        controller.handleOidcCallback("azure", "code123", null, state, response);
+
+        Assertions.assertEquals(
+                "https://host/dolphinscheduler/ui/login?authType=oidc&error=oidc_user_not_registered",
+                response.getRedirectedUrl());
+        Mockito.verifyNoInteractions(sessionService);
     }
 
     @Test

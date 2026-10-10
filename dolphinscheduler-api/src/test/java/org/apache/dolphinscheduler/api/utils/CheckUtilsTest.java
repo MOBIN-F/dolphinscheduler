@@ -17,6 +17,8 @@
 
 package org.apache.dolphinscheduler.api.utils;
 
+import org.apache.commons.lang3.StringUtils;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -29,7 +31,12 @@ public class CheckUtilsTest {
     public void testCheckUserName() {
         Assertions.assertTrue(CheckUtils.checkUserName("test01"));
         Assertions.assertFalse(CheckUtils.checkUserName(null));
-        Assertions.assertFalse(CheckUtils.checkUserName("test01@abc"));
+        Assertions.assertTrue(CheckUtils.checkUserName("test01@abc"));
+        Assertions.assertTrue(CheckUtils.checkUserName("zhang.san@example.com"));
+        Assertions.assertFalse(CheckUtils.checkUserName("test 01"));
+        Assertions.assertFalse(CheckUtils.checkUserName("test#01"));
+        Assertions.assertFalse(CheckUtils.checkUserName("ab"));
+        Assertions.assertFalse(CheckUtils.checkUserName(StringUtils.repeat("a", 65)));
     }
 
     /**

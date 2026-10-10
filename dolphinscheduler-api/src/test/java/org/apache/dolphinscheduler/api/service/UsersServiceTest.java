@@ -175,6 +175,67 @@ public class UsersServiceTest {
         User created =
                 usersService.createUser(loginUser, userNameOk, passwordOk, emailOk, 1, phoneOk, queueName, state);
         Assertions.assertNotNull(created);
+        Assertions.assertEquals(UserType.GENERAL_USER, created.getUserType());
+
+        // user name with '@' and admin user type
+        User createdAdmin = usersService.createUser(loginUser, "new.user@example.com", passwordOk, emailOk, 1,
+                phoneOk, queueName, state, UserType.ADMIN_USER);
+        Assertions.assertEquals("new.user@example.com", createdAdmin.getUserName());
+        Assertions.assertEquals(UserType.ADMIN_USER, createdAdmin.getUserType());
+    }
+
+    @Test
+    public void testUpdateUserNameWithAt() throws Exception {
+        User existUser = getNonAdminUser();
+        existUser.setUserName("zhang.san@example.com");
+        when(userDao.queryById(2)).thenReturn(existUser);
+        when(userDao.updateById(any())).thenReturn(true);
+
+        // the user name is not changed, update other fields should succeed
+        User updated = usersService.updateUser(getLoginUser(), 2,
+                "zhang.san@example.com", "", "zhang.san@example.com", 1, "", "default", 1, null);
+        Assertions.assertEquals(1, updated.getTenantId());
+
+        // change to another user name with '@'
+        assertDoesNotThrow(() -> usersService.updateUser(getLoginUser(), 2,
+                "li.si@example.com", "", "li.si@example.com", 1, "", "default", 1, null));
+
+        // invalid user name
+        assertThrowsServiceException(Status.REQUEST_PARAMS_NOT_VALID_ERROR,
+                () -> usersService.updateUser(getLoginUser(), 2, "invalid#name", "", "a@b.com", 1, "", "default", 1,
+                        null));
+    }
+
+    @Test
+    public void testUpdateUserType() throws Exception {
+        when(userDao.updateById(any())).thenReturn(true);
+
+        // admin changes other user to admin
+        when(userDao.queryById(2)).thenReturn(getNonAdminUser());
+        User updated = usersService.updateUser(getLoginUser(), 2, "userTest0001", "",
+                "a@b.com", 2, "", "queue", 1, null, UserType.ADMIN_USER);
+        Assertions.assertEquals(UserType.ADMIN_USER, updated.getUserType());
+
+        // null user type means not change
+        when(userDao.queryById(2)).thenReturn(getNonAdminUser());
+        updated = usersService.updateUser(getLoginUser(), 2, "userTest0001", "",
+                "a@b.com", 2, "", "queue", 1, null, null);
+        Assertions.assertEquals(UserType.GENERAL_USER, updated.getUserType());
+
+        // non-admin can not change user type
+        User nonAdmin = getNonAdminUser();
+        when(userDao.queryById(2)).thenReturn(getNonAdminUser());
+        assertThrowsServiceException(Status.USER_NO_OPERATION_PERM,
+                () -> usersService.updateUser(nonAdmin, 2, "userTest0001", "", "a@b.com", 2, "", "queue", 1, null,
+                        UserType.ADMIN_USER));
+
+        // admin can not downgrade itself
+        User admin = getLoginUser();
+        admin.setUserName("admin");
+        when(userDao.queryById(1)).thenReturn(admin);
+        assertThrowsServiceException(Status.USER_NO_OPERATION_PERM,
+                () -> usersService.updateUser(getLoginUser(), 1, "admin", "", "a@b.com", 1, "", "default", 1, null,
+                        UserType.GENERAL_USER));
     }
 
     @Test

@@ -25,16 +25,13 @@ import org.apache.dolphinscheduler.api.service.UsersService;
 import org.apache.dolphinscheduler.api.utils.RegexUtils;
 import org.apache.dolphinscheduler.common.constants.Constants;
 import org.apache.dolphinscheduler.common.enums.UserType;
-import org.apache.dolphinscheduler.dao.entity.Tenant;
 import org.apache.dolphinscheduler.dao.entity.User;
-import org.apache.dolphinscheduler.dao.repository.TenantDao;
 
 import java.net.URI;
 import java.security.MessageDigest;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 import javax.servlet.http.HttpServletRequest;
@@ -82,7 +79,6 @@ public class OidcAuthenticator extends AbstractSsoAuthenticator {
     private final OidcConfigProperties oidcConfig;
     private final UsersService usersService;
     private final ApiConfig apiConfig;
-    private final TenantDao tenantDao;
 
     private static final String EMAIL_ATTRIBUTE = "email";
     private static final String STATE_DELIMITER = ":";
@@ -91,12 +87,10 @@ public class OidcAuthenticator extends AbstractSsoAuthenticator {
 
     private final Map<String, OIDCProviderMetadata> providerMetadataCache = new ConcurrentHashMap<>();
 
-    public OidcAuthenticator(OidcConfigProperties oidcConfig, UsersService usersService, ApiConfig apiConfig,
-                             TenantDao tenantDao) {
+    public OidcAuthenticator(OidcConfigProperties oidcConfig, UsersService usersService, ApiConfig apiConfig) {
         this.oidcConfig = oidcConfig;
         this.usersService = usersService;
         this.apiConfig = apiConfig;
-        this.tenantDao = tenantDao;
     }
 
     @Override
@@ -147,38 +141,22 @@ public class OidcAuthenticator extends AbstractSsoAuthenticator {
 
             if (user == null) {
                 if (!oidcConfig.getUser().isAutoCreate()) {
-                    return null;
+                    // The user must be created by the administrator before logging in
+                    throw new ServiceException(Status.USER_NOT_EXIST, username);
                 }
-                Optional<Tenant> defaultTenant = queryDefaultTenant();
-                if (!defaultTenant.isPresent()) {
-                    return null;
-                }
-                return usersService.createUser(userType, username, email, defaultTenant.get().getId(),
-                        getDefaultQueue());
-            }
-
-            boolean needUpdate = false;
-            if (shouldSyncUserType(groups) && user.getUserType() != userType) {
+                user = usersService.createUser(userType, username, email);
+            } else if (shouldSyncUserType(groups) && user.getUserType() != userType) {
                 user.setUserType(userType);
-                needUpdate = true;
-            }
-            if (!hasValidTenant(user)) {
-                // Existing user without a valid tenant, assign the default tenant so that the user can log in
-                Optional<Tenant> defaultTenant = queryDefaultTenant();
-                if (!defaultTenant.isPresent()) {
-                    return null;
-                }
-                user.setTenantId(defaultTenant.get().getId());
-                if (user.getQueue() == null || user.getQueue().isEmpty()) {
-                    user.setQueue(getDefaultQueue());
-                }
-                needUpdate = true;
-            }
-            if (needUpdate) {
                 user = usersService.updateUser(user);
             }
 
             return user;
+        } catch (ServiceException e) {
+            if (e.getCode() == Status.USER_NOT_EXIST.getCode()) {
+                throw e;
+            }
+            log.error("An error occurred during OIDC authentication:", e);
+            return null;
         } catch (Exception e) {
             log.error("An error occurred during OIDC authentication:", e);
             return null;
@@ -420,27 +398,6 @@ public class OidcAuthenticator extends AbstractSsoAuthenticator {
     private boolean shouldSyncUserType(List<String> groups) {
         List<String> adminGroups = oidcConfig.getUser().getAdminGroupMapping();
         return adminGroups != null && !adminGroups.isEmpty() && groups != null;
-    }
-
-    private Optional<Tenant> queryDefaultTenant() {
-        String tenantCode = oidcConfig.getUser().getDefaultTenantCode();
-        Optional<Tenant> tenant = tenantCode == null || tenantCode.isEmpty()
-                ? Optional.empty()
-                : tenantDao.queryByCode(tenantCode);
-        if (!tenant.isPresent()) {
-            log.error("OIDC default tenant code {} not found, please check the default-tenant-code configuration",
-                    tenantCode);
-        }
-        return tenant;
-    }
-
-    private String getDefaultQueue() {
-        String queue = oidcConfig.getUser().getDefaultQueue();
-        return queue == null ? "" : queue;
-    }
-
-    private boolean hasValidTenant(User user) {
-        return user.getTenantId() > 0 && tenantDao.queryOptionalById(user.getTenantId()).isPresent();
     }
 
     private UserType determineUserType(List<String> groups) {

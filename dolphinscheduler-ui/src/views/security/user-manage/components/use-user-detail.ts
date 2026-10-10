@@ -36,7 +36,8 @@ export function useUserDetail() {
     email: '',
     queue: '',
     phone: '',
-    state: 1
+    state: 1,
+    userType: 'GENERAL_USER'
   } as UserReq
 
   let PREV_NAME: string
@@ -147,9 +148,10 @@ export function useUserDetail() {
         await verifyUserName({ userName: state.formData.userName })
       }
 
-      id
-        ? await updateUser({ id, ...state.formData })
-        : await createUser(state.formData)
+      // only admin can change the user type
+      const { userType, ...rest } = state.formData
+      const data = IS_ADMIN ? { ...rest, userType } : rest
+      id ? await updateUser({ id, ...data }) : await createUser(data)
 
       state.saving = false
       return true
@@ -166,7 +168,8 @@ export function useUserDetail() {
         'email',
         'queue',
         'phone',
-        'state'
+        'state',
+        'userType'
       ]),
       userPassword: ''
     } as UserReq
@@ -180,5 +183,13 @@ export function useUserDetail() {
     }
   })
 
-  return { state, formRules, IS_ADMIN, onReset, onSave, onSetValues }
+  return {
+    state,
+    formRules,
+    IS_ADMIN,
+    currentUserId: userInfo.id,
+    onReset,
+    onSave,
+    onSetValues
+  }
 }

@@ -33,18 +33,22 @@ public interface UsersService {
     User createUser(User loginUser, String userName, String userPassword, String email,
                     int tenantId, String phone, String queue, int state) throws Exception;
 
+    /**
+     * create user with the given user type, {@code null} means general user
+     */
+    User createUser(User loginUser, String userName, String userPassword, String email,
+                    int tenantId, String phone, String queue, int state, UserType userType) throws Exception;
+
     User createUser(String userName, String userPassword, String email,
                     int tenantId, String phone, String queue, int state);
+
+    User createUser(String userName, String userPassword, String email,
+                    int tenantId, String phone, String queue, int state, UserType userType);
 
     /***
      * create User for ldap login
      */
     User createUser(UserType userType, String userId, String email);
-
-    /***
-     * create User with the given tenant and queue, used by OIDC login
-     */
-    User createUser(UserType userType, String userId, String email, int tenantId, String queue);
 
     /**
      * get user by user name
@@ -98,6 +102,21 @@ public interface UsersService {
                     String queue,
                     int state,
                     String timeZone) throws IOException;
+
+    /**
+     * update user, {@code userType} is only allowed to be changed by admin, {@code null} means not change
+     */
+    User updateUser(User loginUser,
+                    Integer userId,
+                    String userName,
+                    String userPassword,
+                    String email,
+                    Integer tenantId,
+                    String phone,
+                    String queue,
+                    int state,
+                    String timeZone,
+                    UserType userType) throws IOException;
 
     /**
      * delete user

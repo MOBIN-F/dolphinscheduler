@@ -24,5 +24,6 @@ export default {
   login: '登录',
   loginWithOAuth2: '通过OAuth2登录',
   ssoLogin: '单点登录',
-  loggingIn: '正在登录...'
+  loggingIn: '正在登录...',
+  oidc_user_not_registered: '无权限登录，请先联系管理员申请权限'
 }

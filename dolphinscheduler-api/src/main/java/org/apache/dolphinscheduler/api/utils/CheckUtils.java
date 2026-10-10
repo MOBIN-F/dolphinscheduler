@@ -20,7 +20,6 @@ package org.apache.dolphinscheduler.api.utils;
 import static org.apache.dolphinscheduler.common.constants.Constants.USER_PASSWORD_MAX_LENGTH;
 import static org.apache.dolphinscheduler.common.constants.Constants.USER_PASSWORD_MIN_LENGTH;
 
-import org.apache.dolphinscheduler.common.constants.Constants;
 import org.apache.dolphinscheduler.common.utils.JSONUtils;
 
 import org.apache.commons.lang3.StringUtils;
@@ -31,6 +30,11 @@ import java.util.regex.Pattern;
 import org.hibernate.validator.internal.constraintvalidators.bv.EmailValidator;
 
 public class CheckUtils {
+
+    /**
+     * Allow '@' so that email-like user names (e.g. OIDC users) are valid, max length matches t_ds_user.user_name
+     */
+    private static final Pattern USER_NAME_PATTERN = Pattern.compile("^[a-zA-Z0-9._@-]{3,64}$");
 
     private CheckUtils() {
         throw new IllegalStateException("CheckUtils class");
@@ -43,7 +47,7 @@ public class CheckUtils {
      * @return true if user name regex valid,otherwise return false
      */
     public static boolean checkUserName(String userName) {
-        return regexChecks(userName, Constants.REGEX_USER_NAME);
+        return regexChecks(userName, USER_NAME_PATTERN);
     }
 
     /**

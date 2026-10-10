@@ -38,6 +38,7 @@ import org.apache.dolphinscheduler.api.exceptions.ApiException;
 import org.apache.dolphinscheduler.api.service.UsersService;
 import org.apache.dolphinscheduler.api.utils.Result;
 import org.apache.dolphinscheduler.common.constants.Constants;
+import org.apache.dolphinscheduler.common.enums.UserType;
 import org.apache.dolphinscheduler.dao.entity.User;
 import org.apache.dolphinscheduler.plugin.task.api.utils.ParameterUtils;
 
@@ -81,7 +82,8 @@ public class UsersController extends BaseController {
             @Parameter(name = "queue", description = "QUEUE", schema = @Schema(implementation = String.class)),
             @Parameter(name = "email", description = "EMAIL", required = true, schema = @Schema(implementation = String.class)),
             @Parameter(name = "phone", description = "PHONE", schema = @Schema(implementation = String.class)),
-            @Parameter(name = "state", description = "STATE", schema = @Schema(implementation = int.class, example = "1"))
+            @Parameter(name = "state", description = "STATE", schema = @Schema(implementation = int.class, example = "1")),
+            @Parameter(name = "userType", description = "USER_TYPE", schema = @Schema(implementation = UserType.class))
     })
     @PostMapping(value = "/create")
     @ResponseStatus(HttpStatus.CREATED)
@@ -94,12 +96,14 @@ public class UsersController extends BaseController {
                                    @RequestParam(value = "queue", required = false, defaultValue = "") String queue,
                                    @RequestParam(value = "email") String email,
                                    @RequestParam(value = "phone", required = false) String phone,
-                                   @RequestParam(value = "state", required = false) int state) throws Exception {
+                                   @RequestParam(value = "state", required = false) int state,
+                                   @RequestParam(value = "userType", required = false) UserType userType) throws Exception {
         Result verifyRet = usersService.verifyUserName(userName);
         if (verifyRet.getCode() != Status.SUCCESS.getCode()) {
             return verifyRet;
         }
-        User user = usersService.createUser(loginUser, userName, userPassword, email, tenantId, phone, queue, state);
+        User user = usersService.createUser(loginUser, userName, userPassword, email, tenantId, phone, queue, state,
+                userType);
         return Result.success(user);
     }
 
@@ -130,7 +134,8 @@ public class UsersController extends BaseController {
             @Parameter(name = "queue", description = "QUEUE", schema = @Schema(implementation = String.class)),
             @Parameter(name = "email", description = "EMAIL", required = true, schema = @Schema(implementation = String.class)),
             @Parameter(name = "phone", description = "PHONE", schema = @Schema(implementation = String.class)),
-            @Parameter(name = "state", description = "STATE", schema = @Schema(implementation = int.class, example = "1"))
+            @Parameter(name = "state", description = "STATE", schema = @Schema(implementation = int.class, example = "1")),
+            @Parameter(name = "userType", description = "USER_TYPE", schema = @Schema(implementation = UserType.class))
     })
     @PostMapping(value = "/update")
     @ResponseStatus(HttpStatus.OK)
@@ -145,7 +150,8 @@ public class UsersController extends BaseController {
                                    @RequestParam(value = "tenantId") int tenantId,
                                    @RequestParam(value = "phone", required = false) String phone,
                                    @RequestParam(value = "state", required = false) int state,
-                                   @RequestParam(value = "timeZone", required = false) String timeZone) throws Exception {
+                                   @RequestParam(value = "timeZone", required = false) String timeZone,
+                                   @RequestParam(value = "userType", required = false) UserType userType) throws Exception {
         User user = usersService.updateUser(loginUser,
                 id,
                 userName,
@@ -155,7 +161,8 @@ public class UsersController extends BaseController {
                 phone,
                 queue,
                 state,
-                timeZone);
+                timeZone,
+                userType);
         return Result.success(user);
     }
 

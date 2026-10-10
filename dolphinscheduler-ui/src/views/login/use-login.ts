@@ -36,8 +36,10 @@ import { useTimezoneStore } from '@/store/timezone/timezone'
 import cookies from 'js-cookie'
 import { queryBaseDir } from '@/service/modules/resources'
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 export function useLogin(state: any) {
+  const { t } = useI18n()
   const router: Router = useRouter()
   const userStore = useUserStore()
   const routeStore = useRouteStore()
@@ -120,7 +122,11 @@ export function useLogin(state: any) {
         }
         const error = route.query.error
         if (error) {
-          window.$message.error(String(error))
+          window.$message.error(
+            error === 'oidc_user_not_registered'
+              ? t('login.oidc_user_not_registered')
+              : String(error)
+          )
         }
       }
     }

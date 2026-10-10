@@ -26,6 +26,7 @@ import org.apache.dolphinscheduler.api.configuration.ApiConfig;
 import org.apache.dolphinscheduler.api.configuration.OAuth2Configuration;
 import org.apache.dolphinscheduler.api.enums.Status;
 import org.apache.dolphinscheduler.api.exceptions.ApiException;
+import org.apache.dolphinscheduler.api.exceptions.ServiceException;
 import org.apache.dolphinscheduler.api.security.Authenticator;
 import org.apache.dolphinscheduler.api.security.impl.AbstractSsoAuthenticator;
 import org.apache.dolphinscheduler.api.security.impl.oidc.OidcAuthenticator;
@@ -363,6 +364,15 @@ public class LoginController extends BaseController {
             response.setStatus(HttpStatus.SC_MOVED_TEMPORARILY);
             response.sendRedirect(String.format("%s/login?sessionId=%s&authType=%s",
                     apiConfig.getUiUrl(), session.getId(), "oidc"));
+        } catch (ServiceException ex) {
+            if (ex.getCode() != Status.USER_NOT_EXIST.getCode()) {
+                log.error("A critical error occurred during the OIDC callback process.", ex);
+                response.sendRedirect("/dolphinscheduler/ui/#/login?error=oidc_critical_error");
+                return;
+            }
+            log.warn("OIDC login rejected: {}", ex.getMessage());
+            response.sendRedirect(String.format("%s/login?authType=%s&error=%s",
+                    apiConfig.getUiUrl(), "oidc", "oidc_user_not_registered"));
         } catch (Exception ex) {
             log.error("A critical error occurred during the OIDC callback process.", ex);
             try {

@@ -21,7 +21,7 @@ import type {
 import { UserReq } from '@/service/modules/users/types'
 export type { UserInfoRes } from '@/service/modules/users/types'
 
-type TUserType = 'GENERAL_USER' | ''
+type TUserType = 'GENERAL_USER' | 'ADMIN_USER' | ''
 type TAuthType =
   | 'authorize_project'
   | 'authorize_datasource'
