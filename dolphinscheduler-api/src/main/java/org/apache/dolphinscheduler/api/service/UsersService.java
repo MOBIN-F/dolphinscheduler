@@ -41,6 +41,11 @@ public interface UsersService {
      */
     User createUser(UserType userType, String userId, String email);
 
+    /***
+     * create User with the given tenant and queue, used by OIDC login
+     */
+    User createUser(UserType userType, String userId, String email, int tenantId, String queue);
+
     /**
      * get user by user name
      */

@@ -24,6 +24,7 @@ import org.apache.dolphinscheduler.api.security.impl.oidc.OidcConfigProperties;
 import org.apache.dolphinscheduler.api.security.impl.pwd.PasswordAuthenticator;
 import org.apache.dolphinscheduler.api.security.impl.sso.CasdoorAuthenticator;
 import org.apache.dolphinscheduler.api.service.UsersService;
+import org.apache.dolphinscheduler.dao.repository.TenantDao;
 
 import org.apache.commons.lang3.StringUtils;
 
@@ -92,7 +93,8 @@ public class SecurityConfig {
                     throw new IllegalStateException(
                             "OIDC authentication is configured, but required beans are not available.");
                 }
-                authenticator = new OidcAuthenticator(oidcConfig, usersService, apiConfig);
+                authenticator = new OidcAuthenticator(oidcConfig, usersService, apiConfig,
+                        beanFactory.getBean(TenantDao.class));
                 break;
             default:
                 throw new IllegalStateException("Unexpected value: " + authenticationType);

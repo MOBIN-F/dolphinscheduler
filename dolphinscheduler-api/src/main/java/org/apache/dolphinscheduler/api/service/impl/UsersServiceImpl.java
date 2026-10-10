@@ -184,6 +184,12 @@ public class UsersServiceImpl extends BaseServiceImpl implements UsersService {
     @Override
     @Transactional
     public User createUser(UserType userType, String userId, String email) {
+        return createUser(userType, userId, email, -1, "");
+    }
+
+    @Override
+    @Transactional
+    public User createUser(UserType userType, String userId, String email, int tenantId, String queue) {
         User user = new User();
         Date now = new Date();
 
@@ -193,8 +199,8 @@ public class UsersServiceImpl extends BaseServiceImpl implements UsersService {
         user.setUserType(userType);
         user.setCreateTime(now);
         user.setUpdateTime(now);
-        user.setTenantId(-1);
-        user.setQueue("");
+        user.setTenantId(tenantId);
+        user.setQueue(queue);
         user.setState(Flag.YES.getCode());
 
         // save user

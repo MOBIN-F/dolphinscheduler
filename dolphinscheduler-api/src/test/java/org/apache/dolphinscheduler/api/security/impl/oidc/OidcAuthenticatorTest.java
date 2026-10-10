@@ -18,6 +18,7 @@
 package org.apache.dolphinscheduler.api.security.impl.oidc;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -28,7 +29,9 @@ import org.apache.dolphinscheduler.api.configuration.ApiConfig;
 import org.apache.dolphinscheduler.api.service.UsersService;
 import org.apache.dolphinscheduler.common.constants.Constants;
 import org.apache.dolphinscheduler.common.enums.UserType;
+import org.apache.dolphinscheduler.dao.entity.Tenant;
 import org.apache.dolphinscheduler.dao.entity.User;
+import org.apache.dolphinscheduler.dao.repository.TenantDao;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -40,6 +43,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 import javax.servlet.http.HttpServletRequest;
@@ -101,6 +105,9 @@ public class OidcAuthenticatorTest {
     private ApiConfig apiConfig;
 
     @Mock
+    private TenantDao tenantDao;
+
+    @Mock
     private HttpServletRequest request;
     @Mock
     private HttpSession session;
@@ -111,6 +118,9 @@ public class OidcAuthenticatorTest {
     private final String username = "oidc_user";
     private final String email = "oidc_user@example.com";
     private final String code = "test_auth_code";
+    private final int tenantId = 2;
+    private final String defaultTenantCode = "default";
+    private final String defaultQueue = "default";
 
     @BeforeEach
     public void setUp() {
@@ -118,6 +128,12 @@ public class OidcAuthenticatorTest {
         when(request.getSession()).thenReturn(session);
         RequestContextHolder.setRequestAttributes(attributes);
         when(apiConfig.getBaseUrl()).thenReturn("http://localhost:12345/dolphinscheduler");
+
+        Tenant tenant = new Tenant();
+        tenant.setId(tenantId);
+        tenant.setTenantCode(defaultTenantCode);
+        when(tenantDao.queryByCode(defaultTenantCode)).thenReturn(Optional.of(tenant));
+        when(tenantDao.queryOptionalById(tenantId)).thenReturn(Optional.of(tenant));
     }
 
     @Test
@@ -131,7 +147,7 @@ public class OidcAuthenticatorTest {
         User newUser = new User();
         newUser.setUserName(username);
         newUser.setUserType(UserType.ADMIN_USER);
-        when(usersService.createUser(UserType.ADMIN_USER, username, email)).thenReturn(newUser);
+        when(usersService.createUser(UserType.ADMIN_USER, username, email, tenantId, defaultQueue)).thenReturn(newUser);
 
         executeLoginWithMocks(() -> {
             User resultUser = oidcAuthenticator.login(state, code);
@@ -139,7 +155,7 @@ public class OidcAuthenticatorTest {
             Assertions.assertNotNull(resultUser);
             Assertions.assertEquals(username, resultUser.getUserName());
             Assertions.assertEquals(UserType.ADMIN_USER, resultUser.getUserType());
-            verify(usersService).createUser(UserType.ADMIN_USER, username, email);
+            verify(usersService).createUser(UserType.ADMIN_USER, username, email, tenantId, defaultQueue);
         }, Collections.singletonList("admin-group"), true, true, "http://fake-issuer.com");
     }
 
@@ -148,6 +164,7 @@ public class OidcAuthenticatorTest {
         String state = providerId + ":" + UUID.randomUUID();
         User existingUser = new User();
         existingUser.setUserName(username);
+        existingUser.setTenantId(tenantId);
         existingUser.setUserType(UserType.GENERAL_USER);
 
         when(session.getAttribute(Constants.SSO_LOGIN_USER_STATE)).thenReturn(state);
@@ -158,7 +175,7 @@ public class OidcAuthenticatorTest {
             User resultUser = oidcAuthenticator.login(state, code);
             Assertions.assertNotNull(resultUser);
             Assertions.assertEquals(username, resultUser.getUserName());
-            verify(usersService, never()).createUser(any(), anyString(), anyString());
+            verify(usersService, never()).createUser(any(), anyString(), anyString(), anyInt(), anyString());
         }, Collections.emptyList(), true, true, "http://fake-issuer.com");
     }
 
@@ -174,7 +191,7 @@ public class OidcAuthenticatorTest {
             User resultUser = oidcAuthenticator.login(state, code);
 
             Assertions.assertNull(resultUser);
-            verify(usersService, never()).createUser(any(), anyString(), anyString());
+            verify(usersService, never()).createUser(any(), anyString(), anyString(), anyInt(), anyString());
         }, Collections.emptyList(), true, true, "http://fake-issuer.com");
     }
 
@@ -639,6 +656,7 @@ public class OidcAuthenticatorTest {
         // Existing user currently GENERAL but should become ADMIN due to group mapping
         User existingUser = new User();
         existingUser.setUserName(username);
+        existingUser.setTenantId(tenantId);
         existingUser.setUserType(UserType.GENERAL_USER);
         when(usersService.getUserByUserName(username)).thenReturn(existingUser);
         when(usersService.updateUser(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -660,6 +678,7 @@ public class OidcAuthenticatorTest {
         // Existing user was promoted to ADMIN manually, should not be reset to GENERAL
         User existingUser = new User();
         existingUser.setUserName(username);
+        existingUser.setTenantId(tenantId);
         existingUser.setUserType(UserType.ADMIN_USER);
         when(usersService.getUserByUserName(username)).thenReturn(existingUser);
 
@@ -679,6 +698,7 @@ public class OidcAuthenticatorTest {
 
         User existingUser = new User();
         existingUser.setUserName(username);
+        existingUser.setTenantId(tenantId);
         existingUser.setUserType(UserType.ADMIN_USER);
         when(usersService.getUserByUserName(username)).thenReturn(existingUser);
 
@@ -698,6 +718,7 @@ public class OidcAuthenticatorTest {
 
         User existingUser = new User();
         existingUser.setUserName(username);
+        existingUser.setTenantId(tenantId);
         existingUser.setUserType(UserType.ADMIN_USER);
         when(usersService.getUserByUserName(username)).thenReturn(existingUser);
         when(usersService.updateUser(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
@@ -708,6 +729,64 @@ public class OidcAuthenticatorTest {
             Assertions.assertEquals(UserType.GENERAL_USER, result.getUserType());
             verify(usersService).updateUser(any(User.class));
         }, Collections.singletonList("other-group"), true, true, "http://fake-issuer.com");
+    }
+
+    @Test
+    public void testLogin_NewUserRejectedWhenDefaultTenantNotFound() throws Exception {
+        String state = providerId + ":" + UUID.randomUUID();
+        when(session.getAttribute(Constants.SSO_LOGIN_USER_STATE)).thenReturn(state);
+        mockOidcConfiguration(providerId, true, null);
+        when(usersService.getUserByUserName(username)).thenReturn(null);
+        when(tenantDao.queryByCode(defaultTenantCode)).thenReturn(Optional.empty());
+
+        executeLoginWithMocks(() -> {
+            User result = oidcAuthenticator.login(state, code);
+            Assertions.assertNull(result);
+            verify(usersService, never()).createUser(any(), anyString(), anyString(), anyInt(), anyString());
+        }, Collections.emptyList(), true, true, "http://fake-issuer.com");
+    }
+
+    @Test
+    public void testLogin_ExistingUserWithoutTenantAssignedDefaultTenant() throws Exception {
+        String state = providerId + ":" + UUID.randomUUID();
+        when(session.getAttribute(Constants.SSO_LOGIN_USER_STATE)).thenReturn(state);
+        mockOidcConfiguration(providerId, true, null);
+
+        User existingUser = new User();
+        existingUser.setUserName(username);
+        existingUser.setUserType(UserType.GENERAL_USER);
+        existingUser.setTenantId(-1);
+        existingUser.setQueue("");
+        when(usersService.getUserByUserName(username)).thenReturn(existingUser);
+        when(usersService.updateUser(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        executeLoginWithMocks(() -> {
+            User result = oidcAuthenticator.login(state, code);
+            Assertions.assertNotNull(result);
+            Assertions.assertEquals(tenantId, result.getTenantId());
+            Assertions.assertEquals(defaultQueue, result.getQueue());
+            Assertions.assertEquals(UserType.GENERAL_USER, result.getUserType());
+            verify(usersService).updateUser(any(User.class));
+        }, Collections.emptyList(), true, true, "http://fake-issuer.com");
+    }
+
+    @Test
+    public void testLogin_ExistingUserWithoutTenantRejectedWhenDefaultTenantNotFound() throws Exception {
+        String state = providerId + ":" + UUID.randomUUID();
+        when(session.getAttribute(Constants.SSO_LOGIN_USER_STATE)).thenReturn(state);
+        mockOidcConfiguration(providerId, true, null);
+        when(tenantDao.queryByCode(defaultTenantCode)).thenReturn(Optional.empty());
+
+        User existingUser = new User();
+        existingUser.setUserName(username);
+        existingUser.setTenantId(-1);
+        when(usersService.getUserByUserName(username)).thenReturn(existingUser);
+
+        executeLoginWithMocks(() -> {
+            User result = oidcAuthenticator.login(state, code);
+            Assertions.assertNull(result);
+            verify(usersService, never()).updateUser(any(User.class));
+        }, Collections.emptyList(), true, true, "http://fake-issuer.com");
     }
 
     @Test
@@ -794,7 +873,8 @@ public class OidcAuthenticatorTest {
         User newUser = new User();
         newUser.setUserName(username);
         newUser.setUserType(UserType.GENERAL_USER);
-        when(usersService.createUser(UserType.GENERAL_USER, username, email)).thenReturn(newUser);
+        when(usersService.createUser(UserType.GENERAL_USER, username, email, tenantId, defaultQueue))
+                .thenReturn(newUser);
 
         executeLoginWithMocks(() -> {
             User result = oidcAuthenticator.login(state, code);
