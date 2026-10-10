@@ -58,6 +58,34 @@
       margin-top: 10px;
       margin-bottom: 30px;
     }
+
+    .oidc-providers {
+      padding: 0 20px 24px;
+    }
+
+    .login-tips {
+      text-align: center;
+      color: #8c8c8c;
+      font-size: 13px;
+      margin: 12px 0 20px;
+    }
+  }
+
+  // Only SSO/OIDC login buttons, no login form
+  .login-model-compact {
+    min-height: auto;
+
+    .logo {
+      padding-top: 32px;
+    }
+
+    .oidc-providers {
+      padding: 0 40px 32px;
+    }
+
+    .oidc-provider-link:last-child {
+      margin-bottom: 0;
+    }
   }
 }
 

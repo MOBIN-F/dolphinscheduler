@@ -25,6 +25,7 @@ export default {
   loginWithOAuth2: 'Login with OAuth2',
   ssoLogin: 'SSO Login',
   loggingIn: 'Logging in...',
+  ssoLoginTips: 'Sign in with your organization account',
   oidc_user_not_registered:
     'No permission to log in, please contact the administrator to apply for access'
 }

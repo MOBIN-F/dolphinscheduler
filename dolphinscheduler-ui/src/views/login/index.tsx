@@ -132,6 +132,11 @@ const login = defineComponent({
     }
   },
   render() {
+    const showLoginForm =
+      this.loginOptionsLoaded &&
+      this.loginForm.ssoLoginUrl.length === 0 &&
+      // Only OIDC login is allowed when OIDC authentication is enabled
+      this.oidcProviders.length === 0
     if (this.ssoRedirecting) {
       return (
         <div class={styles.container}>
@@ -158,19 +163,21 @@ const login = defineComponent({
             }}
           </NSwitch>
         </div>
-        <div class={styles['login-model']}>
+        <div
+          class={[
+            styles['login-model'],
+            !showLoginForm && styles['login-model-compact']
+          ]}
+        >
           <div class={styles.logo}>
             <div class={styles['logo-img']} />
           </div>
-          <div
-            class={styles['form-model']}
-            v-show={
-              this.loginOptionsLoaded &&
-              this.loginForm.ssoLoginUrl.length === 0 &&
-              // Only OIDC login is allowed when OIDC authentication is enabled
-              this.oidcProviders.length === 0
-            }
-          >
+          {!showLoginForm && this.oidcProviders.length > 0 && (
+            <div class={styles['login-tips']}>
+              {this.t('login.ssoLoginTips')}
+            </div>
+          )}
+          <div class={styles['form-model']} v-show={showLoginForm}>
             <NForm rules={this.rules} ref='loginFormRef'>
               <NFormItem
                 label={this.t('login.userName')}
@@ -238,34 +245,47 @@ const login = defineComponent({
               <NDivider>{this.t('login.loginWithOAuth2')}</NDivider>
             )}
 
-          <NSpace class={styles['oauth2-provider']} justify='center'>
-            {this.oauth2Providers?.map((e: OAuth2Provider) => {
-              return e.iconUri ? (
-                <div onClick={() => this.gotoOAuth2Page(e)}>
-                  <NImage preview-disabled width='30' src={e.iconUri}></NImage>{' '}
-                </div>
-              ) : (
-                <NButton onClick={() => this.gotoOAuth2Page(e)}>
-                  {e.provider}
-                </NButton>
-              )
-            })}
-            {this.oidcProviders?.map((e: OidcProvider) => {
-              const authUrl = `/dolphinscheduler/oauth2/authorization/${e.id}`
-              return (
-                <a href={authUrl} class={styles['oidc-provider-link']}>
-                  <NButton block class={styles['oidc-provider-btn']}>
-                    <div class={styles['oidc-btn-content']}>
-                      {e.iconUri && (
-                        <img src={e.iconUri} class={styles['oidc-btn-icon']} />
-                      )}
-                      <span>{e.displayName}</span>
-                    </div>
+          {this.oauth2Providers.length > 0 && (
+            <NSpace class={styles['oauth2-provider']} justify='center'>
+              {this.oauth2Providers.map((e: OAuth2Provider) => {
+                return e.iconUri ? (
+                  <div onClick={() => this.gotoOAuth2Page(e)}>
+                    <NImage
+                      preview-disabled
+                      width='30'
+                      src={e.iconUri}
+                    ></NImage>{' '}
+                  </div>
+                ) : (
+                  <NButton onClick={() => this.gotoOAuth2Page(e)}>
+                    {e.provider}
                   </NButton>
-                </a>
-              )
-            })}
-          </NSpace>
+                )
+              })}
+            </NSpace>
+          )}
+          {this.oidcProviders.length > 0 && (
+            <div class={styles['oidc-providers']}>
+              {this.oidcProviders.map((e: OidcProvider) => {
+                const authUrl = `/dolphinscheduler/oauth2/authorization/${e.id}`
+                return (
+                  <a href={authUrl} class={styles['oidc-provider-link']}>
+                    <NButton block class={styles['oidc-provider-btn']}>
+                      <div class={styles['oidc-btn-content']}>
+                        {e.iconUri && (
+                          <img
+                            src={e.iconUri}
+                            class={styles['oidc-btn-icon']}
+                          />
+                        )}
+                        <span>{e.displayName}</span>
+                      </div>
+                    </NButton>
+                  </a>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
     )
