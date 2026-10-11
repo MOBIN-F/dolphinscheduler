@@ -130,7 +130,7 @@ export const UserModal = defineComponent({
               placeholder={t('security.user.username_tips')}
             />
           </NFormItem>
-          {!this.currentRecord?.id && (
+          {!this.currentRecord?.id && !this.oidcEnabled && (
             <NFormItem
               label={t('security.user.user_password')}
               path='userPassword'

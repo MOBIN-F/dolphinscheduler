@@ -77,7 +77,7 @@ public class UsersController extends BaseController {
     @Operation(summary = "createUser", description = "CREATE_USER_NOTES")
     @Parameters({
             @Parameter(name = "userName", description = "USER_NAME", required = true, schema = @Schema(implementation = String.class)),
-            @Parameter(name = "userPassword", description = "USER_PASSWORD", required = true, schema = @Schema(implementation = String.class)),
+            @Parameter(name = "userPassword", description = "USER_PASSWORD", schema = @Schema(implementation = String.class)),
             @Parameter(name = "tenantId", description = "TENANT_ID", required = true, schema = @Schema(implementation = int.class, example = "100")),
             @Parameter(name = "queue", description = "QUEUE", schema = @Schema(implementation = String.class)),
             @Parameter(name = "email", description = "EMAIL", required = true, schema = @Schema(implementation = String.class)),
@@ -91,7 +91,7 @@ public class UsersController extends BaseController {
     @OperatorLog(auditType = AuditType.USER_CREATE)
     public Result<User> createUser(@Parameter(hidden = true) @RequestAttribute(value = Constants.SESSION_USER) User loginUser,
                                    @RequestParam(value = "userName") String userName,
-                                   @RequestParam(value = "userPassword") String userPassword,
+                                   @RequestParam(value = "userPassword", required = false) String userPassword,
                                    @RequestParam(value = "tenantId") int tenantId,
                                    @RequestParam(value = "queue", required = false, defaultValue = "") String queue,
                                    @RequestParam(value = "email") String email,

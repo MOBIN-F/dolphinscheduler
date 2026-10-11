@@ -21,6 +21,7 @@ import static org.apache.dolphinscheduler.api.constants.ApiFuncIdentificationCon
 
 import org.apache.dolphinscheduler.api.enums.Status;
 import org.apache.dolphinscheduler.api.exceptions.ServiceException;
+import org.apache.dolphinscheduler.api.security.impl.oidc.OidcConfigProperties;
 import org.apache.dolphinscheduler.api.service.SessionService;
 import org.apache.dolphinscheduler.api.service.UsersService;
 import org.apache.dolphinscheduler.api.utils.CheckUtils;
@@ -103,6 +104,9 @@ public class UsersServiceImpl extends BaseServiceImpl implements UsersService {
     @Autowired
     private SessionService sessionService;
 
+    @Autowired
+    private OidcConfigProperties oidcConfigProperties;
+
     /**
      * create user, only system admin have permission
      *
@@ -145,7 +149,9 @@ public class UsersServiceImpl extends BaseServiceImpl implements UsersService {
         }
 
         // check all user params
-        String msg = this.checkUserParams(userName, userPassword, email, phone);
+        // users log in by OIDC when it is enabled, so the password is optional
+        boolean checkPassword = !isOidcEnabled() || StringUtils.isNotEmpty(userPassword);
+        String msg = this.checkUserParams(userName, userPassword, email, phone, checkPassword);
         if (!StringUtils.isEmpty(msg)) {
             throw new ServiceException(Status.REQUEST_PARAMS_NOT_VALID_ERROR, msg);
         }
@@ -186,7 +192,7 @@ public class UsersServiceImpl extends BaseServiceImpl implements UsersService {
         Date now = new Date();
 
         user.setUserName(userName);
-        user.setUserPassword(EncryptionUtils.getMd5(userPassword));
+        user.setUserPassword(StringUtils.isEmpty(userPassword) ? null : EncryptionUtils.getMd5(userPassword));
         user.setEmail(email);
         user.setTenantId(tenantId);
         user.setPhone(phone);
@@ -931,6 +937,10 @@ public class UsersServiceImpl extends BaseServiceImpl implements UsersService {
         return userDao.queryUserListByAlertGroupId(alertGroupId);
     }
 
+    private boolean isOidcEnabled() {
+        return oidcConfigProperties != null && oidcConfigProperties.isEnable();
+    }
+
     /**
      * @param tenantId tenant id
      * @return true if tenant exists, otherwise return false
@@ -943,14 +953,20 @@ public class UsersServiceImpl extends BaseServiceImpl implements UsersService {
      * @return if check failed return the field, otherwise return null
      */
     private String checkUserParams(String userName, String password, String email, String phone) {
+        return checkUserParams(userName, password, email, phone, true);
+    }
+
+    private String checkUserParams(String userName, String password, String email, String phone,
+                                   boolean checkPassword) {
 
         String msg = null;
         if (!CheckUtils.checkUserName(userName)) {
             log.warn("Parameter userName check failed.");
             msg = userName;
-        } else if (!CheckUtils.checkPassword(password)) {
+        } else if (checkPassword && !CheckUtils.checkPassword(password)) {
             log.warn("Parameter password check failed.");
-            msg = password;
+            // an empty msg means the check passed, so use the field name for the empty password
+            msg = StringUtils.isEmpty(password) ? "userPassword" : password;
         } else if (!CheckUtils.checkEmail(email)) {
             log.warn("Parameter email check failed.");
             msg = email;

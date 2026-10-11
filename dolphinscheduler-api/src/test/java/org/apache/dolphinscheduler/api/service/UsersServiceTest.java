@@ -26,6 +26,7 @@ import static org.mockito.Mockito.when;
 
 import org.apache.dolphinscheduler.api.enums.Status;
 import org.apache.dolphinscheduler.api.permission.ResourcePermissionCheckService;
+import org.apache.dolphinscheduler.api.security.impl.oidc.OidcConfigProperties;
 import org.apache.dolphinscheduler.api.service.impl.BaseServiceImpl;
 import org.apache.dolphinscheduler.api.service.impl.UsersServiceImpl;
 import org.apache.dolphinscheduler.api.utils.PageInfo;
@@ -103,6 +104,9 @@ public class UsersServiceTest {
 
     @Mock
     private SessionService sessionService;
+
+    @Mock
+    private OidcConfigProperties oidcConfigProperties;
 
     private String queueName = "UsersServiceTestQueue";
 
@@ -182,6 +186,29 @@ public class UsersServiceTest {
                 phoneOk, queueName, state, UserType.ADMIN_USER);
         Assertions.assertEquals("new.user@example.com", createdAdmin.getUserName());
         Assertions.assertEquals(UserType.ADMIN_USER, createdAdmin.getUserType());
+    }
+
+    @Test
+    public void testCreateUserWithoutPassword() throws Exception {
+        User loginUser = getLoginUser();
+        Mockito.when(tenantDao.queryDetailById(1)).thenReturn(getTenant());
+
+        // password is required when OIDC is disabled
+        Mockito.when(oidcConfigProperties.isEnable()).thenReturn(false);
+        assertThrowsServiceException(Status.REQUEST_PARAMS_NOT_VALID_ERROR,
+                () -> usersService.createUser(loginUser, "oidc.user@example.com", "", "oidc.user@example.com", 1,
+                        "", queueName, 1, null));
+
+        // password is optional when OIDC is enabled, users log in by OIDC
+        Mockito.when(oidcConfigProperties.isEnable()).thenReturn(true);
+        User created = usersService.createUser(loginUser, "oidc.user@example.com", null, "oidc.user@example.com", 1,
+                "", queueName, 1, null);
+        Assertions.assertNull(created.getUserPassword());
+
+        // the password is still checked if it is given
+        assertThrowsServiceException(Status.REQUEST_PARAMS_NOT_VALID_ERROR,
+                () -> usersService.createUser(loginUser, "oidc.user@example.com", "a12345678901234567890",
+                        "oidc.user@example.com", 1, "", queueName, 1, null));
     }
 
     @Test

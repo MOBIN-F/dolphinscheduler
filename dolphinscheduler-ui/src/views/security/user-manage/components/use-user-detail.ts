@@ -20,6 +20,7 @@ import { pick } from 'lodash'
 import { queryTenantList } from '@/service/modules/tenants'
 import { queryList } from '@/service/modules/queues'
 import { verifyUserName, createUser, updateUser } from '@/service/modules/users'
+import { getOidcProviders } from '@/service/modules/login'
 import { useUserStore } from '@/store/user/user'
 import type { IRecord, UserReq, UserInfoRes } from '../types'
 
@@ -47,6 +48,8 @@ export function useUserDetail() {
     formData: { ...initialValues },
     saving: false,
     loading: false,
+    // users log in by OIDC when it is enabled, so the password is not needed
+    oidcEnabled: false,
     queues: [] as { label: string; value: string }[],
     tenants: [] as { label: string; value: number }[]
   })
@@ -176,10 +179,16 @@ export function useUserDetail() {
     PREV_NAME = state.formData.userName
   }
 
+  const getOidcEnabled = async () => {
+    const providers = await getOidcProviders()
+    state.oidcEnabled = !!providers?.length
+  }
+
   onMounted(async () => {
     if (IS_ADMIN) {
       getQueues()
       getTenants()
+      getOidcEnabled()
     }
   })
 
