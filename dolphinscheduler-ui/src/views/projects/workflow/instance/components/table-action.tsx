@@ -135,55 +135,65 @@ export default defineComponent({
         <NTooltip trigger={'hover'}>
           {{
             default: () => t('project.workflow.rerun'),
-            trigger: () => {
-              return (
-                <NButton
-                  tag='div'
-                  size='small'
-                  type='info'
-                  circle
-                  onClick={this.handleReRun}
-                  class='btn-rerun'
-                  disabled={
-                    (state !== 'SUCCESS' &&
-                      state !== 'PAUSE' &&
-                      state !== 'FAILURE' &&
-                      state !== 'STOP') ||
-                    this.row?.disabled
-                  }
-                >
-                  {this.row?.buttonType === 'run' ? (
-                    <span>{this.row?.count}</span>
-                  ) : (
-                    <NIcon>
-                      <SyncOutlined />
-                    </NIcon>
-                  )}
-                </NButton>
-              )
-            }
+            trigger: () => (
+              <NPopconfirm onPositiveClick={this.handleReRun}>
+                {{
+                  default: () => t('project.workflow.rerun_confirm'),
+                  trigger: () => (
+                    <NButton
+                      tag='div'
+                      size='small'
+                      type='info'
+                      circle
+                      class='btn-rerun'
+                      disabled={
+                        (state !== 'SUCCESS' &&
+                          state !== 'PAUSE' &&
+                          state !== 'FAILURE' &&
+                          state !== 'STOP') ||
+                        this.row?.disabled
+                      }
+                    >
+                      {this.row?.buttonType === 'run' ? (
+                        <span>{this.row?.count}</span>
+                      ) : (
+                        <NIcon>
+                          <SyncOutlined />
+                        </NIcon>
+                      )}
+                    </NButton>
+                  )
+                }}
+              </NPopconfirm>
+            )
           }}
         </NTooltip>
         <NTooltip trigger={'hover'}>
           {{
             default: () => t('project.workflow.recovery_failed'),
             trigger: () => (
-              <NButton
-                tag='div'
-                size='small'
-                type='primary'
-                circle
-                onClick={this.handleReStore}
-                disabled={state !== 'FAILURE' || this.row?.disabled}
-              >
-                {this.row?.buttonType === 'store' ? (
-                  <span>{this.row?.count}</span>
-                ) : (
-                  <NIcon>
-                    <CloseCircleOutlined />
-                  </NIcon>
-                )}
-              </NButton>
+              <NPopconfirm onPositiveClick={this.handleReStore}>
+                {{
+                  default: () => t('project.workflow.recovery_failed_confirm'),
+                  trigger: () => (
+                    <NButton
+                      tag='div'
+                      size='small'
+                      type='primary'
+                      circle
+                      disabled={state !== 'FAILURE' || this.row?.disabled}
+                    >
+                      {this.row?.buttonType === 'store' ? (
+                        <span>{this.row?.count}</span>
+                      ) : (
+                        <NIcon>
+                          <CloseCircleOutlined />
+                        </NIcon>
+                      )}
+                    </NButton>
+                  )
+                }}
+              </NPopconfirm>
             )
           }}
         </NTooltip>
@@ -194,25 +204,34 @@ export default defineComponent({
                 ? t('project.workflow.recovery_suspend')
                 : t('project.workflow.stop'),
             trigger: () => (
-              <NButton
-                tag='div'
-                size='small'
-                type='error'
-                circle
-                onClick={this.handleStop}
-                disabled={
-                  (state !== 'RUNNING_EXECUTION' && state !== 'STOP') ||
-                  this.row?.disabled
-                }
-              >
-                <NIcon>
-                  {state === 'STOP' ? (
-                    <PlayCircleOutlined />
-                  ) : (
-                    <CloseOutlined />
-                  )}
-                </NIcon>
-              </NButton>
+              <NPopconfirm onPositiveClick={this.handleStop}>
+                {{
+                  default: () =>
+                    state === 'STOP'
+                      ? t('project.workflow.recovery_suspend_confirm')
+                      : t('project.workflow.stop_confirm'),
+                  trigger: () => (
+                    <NButton
+                      tag='div'
+                      size='small'
+                      type='error'
+                      circle
+                      disabled={
+                        (state !== 'RUNNING_EXECUTION' && state !== 'STOP') ||
+                        this.row?.disabled
+                      }
+                    >
+                      <NIcon>
+                        {state === 'STOP' ? (
+                          <PlayCircleOutlined />
+                        ) : (
+                          <CloseOutlined />
+                        )}
+                      </NIcon>
+                    </NButton>
+                  )
+                }}
+              </NPopconfirm>
             )
           }}
         </NTooltip>
