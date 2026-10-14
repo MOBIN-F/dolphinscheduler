@@ -33,6 +33,41 @@
   }
 }
 
+.split.three {
+  .settings {
+    flex: 3;
+    min-width: 0;
+    max-height: calc(100vh - 220px);
+    overflow-y: auto;
+    padding-right: 8px;
+  }
+
+  .middle {
+    flex: 3;
+    min-width: 0;
+  }
+
+  .editor {
+    flex: 4;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 1400px) {
+  .split.three {
+    flex-wrap: wrap;
+
+    .settings,
+    .middle {
+      flex: 1 1 45%;
+    }
+
+    .editor {
+      flex: 1 1 100%;
+    }
+  }
+}
+
 @media (max-width: 1200px) {
   .split {
     flex-direction: column;

@@ -1,0 +1,2995 @@
+{
+  "version" : "2.3.13",
+  "exportTime" : 1791945895834,
+  "connectors" : [ {
+    "name" : "Clickhouse",
+    "type" : "source",
+    "required" : [ {
+      "key" : "host",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Clickhouse server host",
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "username",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Clickhouse server username",
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "password",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Clickhouse server password",
+      "category" : "absolutely_required",
+      "group" : 1
+    } ],
+    "optional" : [ {
+      "key" : "table_path",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The path to the full path of table"
+    }, {
+      "key" : "clickhouse.config",
+      "type" : "map<string,string>",
+      "defaultValue" : { },
+      "description" : "Clickhouse custom config"
+    }, {
+      "key" : "server_time_zone",
+      "type" : "string",
+      "defaultValue" : "Asia/Shanghai",
+      "description" : "The session time zone in database server.If not set, then ZoneId.systemDefault() is used to determine the server time zone"
+    }, {
+      "key" : "sql",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Clickhouse sql used to query data"
+    }, {
+      "key" : "split.size",
+      "type" : "int",
+      "defaultValue" : 2147483647,
+      "description" : "The number of parts in each splits"
+    }, {
+      "key" : "partition_list",
+      "type" : "list<string>",
+      "defaultValue" : null,
+      "description" : "The partition used to filter data, if not set, the whole table will be queried"
+    }, {
+      "key" : "batch_size",
+      "type" : "int",
+      "defaultValue" : 1024,
+      "description" : "The maximum rows of data that can be obtained by reading from Clickhouse once."
+    }, {
+      "key" : "filter_query",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Filter expression of the query. such as id > 2."
+    } ]
+  }, {
+    "name" : "S3File",
+    "type" : "source",
+    "required" : [ {
+      "key" : "path",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The file path of target files",
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "file_format_type",
+      "type" : "enum<FileFormat>",
+      "defaultValue" : null,
+      "description" : "File format type, e.g. json, csv, text, parquet, orc, avro....",
+      "optionValues" : [ "CSV", "TEXT", "PARQUET", "ORC", "JSON", "EXCEL", "XML", "BINARY", "CANAL_JSON", "DEBEZIUM_JSON", "MAXWELL_JSON", "MARKDOWN" ],
+      "category" : "absolutely_required",
+      "group" : 2
+    }, {
+      "key" : "bucket",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "S3 bucket",
+      "category" : "absolutely_required",
+      "group" : 3
+    }, {
+      "key" : "fs.s3a.endpoint",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "fs s3a endpoint",
+      "category" : "absolutely_required",
+      "group" : 4
+    }, {
+      "key" : "fs.s3a.aws.credentials.provider",
+      "type" : "enum<S3aAwsCredentialsProvider>",
+      "defaultValue" : "InstanceProfileCredentialsProvider",
+      "description" : "s3a aws credentials provider",
+      "optionValues" : [ "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider", "com.amazonaws.auth.InstanceProfileCredentialsProvider" ],
+      "category" : "absolutely_required",
+      "group" : 5
+    }, {
+      "key" : "access_key",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "S3 access key",
+      "category" : "conditional",
+      "group" : 6,
+      "conditionExpression" : "'fs.s3a.aws.credentials.provider' == org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "fs.s3a.aws.credentials.provider",
+          "expectValue" : "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider"
+        }
+      }
+    }, {
+      "key" : "secret_key",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "S3 secret key",
+      "category" : "conditional",
+      "group" : 6,
+      "conditionExpression" : "'fs.s3a.aws.credentials.provider' == org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "fs.s3a.aws.credentials.provider",
+          "expectValue" : "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider"
+        }
+      }
+    }, {
+      "key" : "row_delimiter",
+      "type" : "string",
+      "defaultValue" : "\n",
+      "description" : "The separator between rows in a file. Only needed by `text` file format",
+      "category" : "conditional",
+      "group" : 7,
+      "conditionExpression" : "'file_format_type' == TEXT",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "TEXT"
+        }
+      }
+    }, {
+      "key" : "field_delimiter",
+      "type" : "string",
+      "defaultValue" : "\u0001",
+      "description" : "The separator between columns in a row of data. Only needed by `text` file format",
+      "fallbackKeys" : [ "delimiter" ],
+      "category" : "conditional",
+      "group" : 7,
+      "conditionExpression" : "'file_format_type' == TEXT",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "TEXT"
+        }
+      }
+    }, {
+      "key" : "skip_header_row_number",
+      "type" : "long",
+      "defaultValue" : 0,
+      "description" : "The number of rows to skip",
+      "category" : "conditional",
+      "group" : 7,
+      "conditionExpression" : "'file_format_type' == TEXT",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "TEXT"
+        }
+      }
+    }, {
+      "key" : "xml_row_tag",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Specifies the tag name of the data rows within the XML file, only valid for XML files.",
+      "category" : "conditional",
+      "group" : 8,
+      "conditionExpression" : "'file_format_type' == XML",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "XML"
+        }
+      }
+    }, {
+      "key" : "xml_use_attr_format",
+      "type" : "boolean",
+      "defaultValue" : null,
+      "description" : "Specifies whether to process data using the tag attribute format, only valid for XML files.",
+      "category" : "conditional",
+      "group" : 8,
+      "conditionExpression" : "'file_format_type' == XML",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "XML"
+        }
+      }
+    }, {
+      "key" : "skip_header_row_number",
+      "type" : "long",
+      "defaultValue" : 0,
+      "description" : "The number of rows to skip",
+      "category" : "conditional",
+      "group" : 9,
+      "conditionExpression" : "'file_format_type' == CSV",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "CSV"
+        }
+      }
+    }, {
+      "key" : "schema",
+      "type" : "map<string,object>",
+      "defaultValue" : null,
+      "description" : "SeaTunnel Schema",
+      "category" : "conditional",
+      "group" : 10,
+      "conditionExpression" : "'file_format_type' == TEXT || 'file_format_type' == JSON || 'file_format_type' == EXCEL || 'file_format_type' == CSV || 'file_format_type' == XML",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "TEXT"
+        },
+        "operator" : "OR",
+        "next" : {
+          "condition" : {
+            "key" : "file_format_type",
+            "expectValue" : "JSON"
+          },
+          "operator" : "OR",
+          "next" : {
+            "condition" : {
+              "key" : "file_format_type",
+              "expectValue" : "EXCEL"
+            },
+            "operator" : "OR",
+            "next" : {
+              "condition" : {
+                "key" : "file_format_type",
+                "expectValue" : "CSV"
+              },
+              "operator" : "OR",
+              "next" : {
+                "condition" : {
+                  "key" : "file_format_type",
+                  "expectValue" : "XML"
+                }
+              }
+            }
+          }
+        }
+      }
+    }, {
+      "key" : "encoding",
+      "type" : "string",
+      "defaultValue" : "UTF-8",
+      "description" : "The encoding of the file, e.g. UTF-8, ISO-8859-1....",
+      "category" : "conditional",
+      "group" : 11,
+      "conditionExpression" : "'file_format_type' == TEXT || 'file_format_type' == JSON || 'file_format_type' == CSV || 'file_format_type' == XML",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "TEXT"
+        },
+        "operator" : "OR",
+        "next" : {
+          "condition" : {
+            "key" : "file_format_type",
+            "expectValue" : "JSON"
+          },
+          "operator" : "OR",
+          "next" : {
+            "condition" : {
+              "key" : "file_format_type",
+              "expectValue" : "CSV"
+            },
+            "operator" : "OR",
+            "next" : {
+              "condition" : {
+                "key" : "file_format_type",
+                "expectValue" : "XML"
+              }
+            }
+          }
+        }
+      }
+    } ],
+    "optional" : [ {
+      "key" : "hadoop_s3_properties",
+      "type" : "map<string,string>",
+      "defaultValue" : null,
+      "description" : "S3 properties"
+    }, {
+      "key" : "parse_partition_from_path",
+      "type" : "boolean",
+      "defaultValue" : true,
+      "description" : "Whether parse partition fields from file path"
+    }, {
+      "key" : "date_format",
+      "type" : "enum<Formatter>",
+      "defaultValue" : "YYYY_MM_DD",
+      "description" : "Date format",
+      "optionValues" : [ "YYYY_MM_DD", "YYYY_M_D", "YYYY_MM_DD_SPOT", "YYYY_MM_DD_SLASH" ]
+    }, {
+      "key" : "datetime_format",
+      "type" : "enum<Formatter>",
+      "defaultValue" : "YYYY_MM_DD_HH_MM_SS",
+      "description" : "Datetime format",
+      "optionValues" : [ "YYYY_MM_DD_HH_MM_SS", "YYYY_MM_DD_HH_MM_SS_SSSSSS", "YYYY_MM_DD_HH_MM_SS_SPOT", "YYYY_MM_DD_HH_MM_SS_SLASH", "YYYY_M_D_HH_MM_SLASH", "YYYY_M_D_HH_MM_ISO8601", "YYYY_M_D_HH_MM_SS_SLASH", "YYYY_M_D_HH_MM_SS_ISO8601", "YYYY_MM_DD_HH_MM_SS_NO_SPLIT", "YYYY_MM_DD_HH_MM_SS_ISO8601", "YYYY_MM_DD_HH_MM_SS_SSS_ISO8601", "YYYY_MM_DD_HH_MM_SS_SSSSSS_ISO8601", "YYYY_MM_DD_HH_MM_SS_SSSSSSSSS_ISO8601" ]
+    }, {
+      "key" : "time_format",
+      "type" : "enum<Formatter>",
+      "defaultValue" : "HH_MM_SS",
+      "description" : "Time format",
+      "optionValues" : [ "HH_MM_SS", "HH_MM_SS_SSS" ]
+    }, {
+      "key" : "file_filter_pattern",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "File pattern. The connector will filter some files base on the pattern."
+    }, {
+      "key" : "compress_codec",
+      "type" : "enum<CompressFormat>",
+      "defaultValue" : "NONE",
+      "description" : "Compression codec",
+      "optionValues" : [ "LZO", "NONE", "SNAPPY", "LZ4", "ZLIB", "GZIP", "BROTLI", "ZSTD" ]
+    }, {
+      "key" : "archive_compress_codec",
+      "type" : "enum<ArchiveCompressFormat>",
+      "defaultValue" : "NONE",
+      "description" : "Archive compression codec",
+      "optionValues" : [ "NONE", "ZIP", "TAR", "TAR_GZ", "GZ" ]
+    }, {
+      "key" : "null_format",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The string that represents a null value"
+    }, {
+      "key" : "filename_extension",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Filter filename extension, which used for filtering files with specific extension. Example: `csv` `.txt` `json` `.xml`."
+    }, {
+      "key" : "read_columns",
+      "type" : "list<string>",
+      "defaultValue" : null,
+      "description" : "The columns list that the user want to read"
+    }, {
+      "key" : "quote_char",
+      "type" : "string",
+      "defaultValue" : "\"",
+      "description" : "A single character that encloses CSV fields, allowing fields with commas, line breaks, or quotes to be read correctly."
+    }, {
+      "key" : "escape_char",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "A single character that allows the quote or other special characters to appear inside a CSV field without ending the field."
+    }, {
+      "key" : "parallelism",
+      "type" : "int",
+      "defaultValue" : 1,
+      "description" : "When parallelism is not specified in connector, the parallelism in env is used by default. When parallelism is specified, it will override the parallelism in env."
+    } ]
+  }, {
+    "name" : "FakeSource",
+    "type" : "source",
+    "required" : [ {
+      "key" : "tables_configs",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : null,
+      "description" : "SeaTunnel Multi Table Schema, acts on structured and unstructured data sources. such as file, assert, mongodb, jdbc, paimon, doris, etc",
+      "category" : "exclusive",
+      "group" : 1
+    }, {
+      "key" : "schema",
+      "type" : "map<string,object>",
+      "defaultValue" : null,
+      "description" : "SeaTunnel Schema",
+      "category" : "exclusive",
+      "group" : 1
+    }, {
+      "key" : "string.template",
+      "type" : "list<string>",
+      "defaultValue" : null,
+      "description" : "The template list of string type that connector generated, if user configured it, connector will randomly select an item from the template list",
+      "category" : "conditional",
+      "group" : 2,
+      "conditionExpression" : "'string.fake.mode' == TEMPLATE",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "string.fake.mode",
+          "expectValue" : "TEMPLATE"
+        }
+      }
+    }, {
+      "key" : "tinyint.template",
+      "type" : "list<int>",
+      "defaultValue" : null,
+      "description" : "The template list of tinyint type, if user configured it, connector will randomly select an item from the template list",
+      "category" : "conditional",
+      "group" : 3,
+      "conditionExpression" : "'tinyint.fake.mode' == TEMPLATE",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "tinyint.fake.mode",
+          "expectValue" : "TEMPLATE"
+        }
+      }
+    }, {
+      "key" : "smallint.template",
+      "type" : "list<int>",
+      "defaultValue" : null,
+      "description" : "The template list of smallint type, if user configured it, connector will randomly select an item from the template list",
+      "category" : "conditional",
+      "group" : 4,
+      "conditionExpression" : "'smallint.fake.mode' == TEMPLATE",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "smallint.fake.mode",
+          "expectValue" : "TEMPLATE"
+        }
+      }
+    }, {
+      "key" : "int.template",
+      "type" : "list<int>",
+      "defaultValue" : null,
+      "description" : "The template list of int type, if user configured it, connector will randomly select an item from the template list",
+      "category" : "conditional",
+      "group" : 5,
+      "conditionExpression" : "'int.fake.mode' == TEMPLATE",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "int.fake.mode",
+          "expectValue" : "TEMPLATE"
+        }
+      }
+    }, {
+      "key" : "bigint.template",
+      "type" : "list<long>",
+      "defaultValue" : null,
+      "description" : "The template list of bigint type, if user configured it, connector will randomly select an item from the template list",
+      "category" : "conditional",
+      "group" : 6,
+      "conditionExpression" : "'bigint.fake.mode' == TEMPLATE",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "bigint.fake.mode",
+          "expectValue" : "TEMPLATE"
+        }
+      }
+    }, {
+      "key" : "float.template",
+      "type" : "list<double>",
+      "defaultValue" : null,
+      "description" : "The template list of float type, if user configured it, connector will randomly select an item from the template list",
+      "category" : "conditional",
+      "group" : 7,
+      "conditionExpression" : "'float.fake.mode' == TEMPLATE",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "float.fake.mode",
+          "expectValue" : "TEMPLATE"
+        }
+      }
+    }, {
+      "key" : "double.template",
+      "type" : "list<double>",
+      "defaultValue" : null,
+      "description" : "The template list of double type, if user configured it, connector will randomly select an item from the template list",
+      "category" : "conditional",
+      "group" : 8,
+      "conditionExpression" : "'double.fake.mode' == TEMPLATE",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "double.fake.mode",
+          "expectValue" : "TEMPLATE"
+        }
+      }
+    } ],
+    "optional" : [ {
+      "key" : "string.fake.mode",
+      "type" : "enum<FakeMode>",
+      "defaultValue" : "RANGE",
+      "description" : "The fake mode of generating string data",
+      "optionValues" : [ "RANGE", "TEMPLATE" ]
+    }, {
+      "key" : "tinyint.fake.mode",
+      "type" : "enum<FakeMode>",
+      "defaultValue" : "RANGE",
+      "description" : "The fake mode of generating tinyint data",
+      "optionValues" : [ "RANGE", "TEMPLATE" ]
+    }, {
+      "key" : "smallint.fake.mode",
+      "type" : "enum<FakeMode>",
+      "defaultValue" : "RANGE",
+      "description" : "The fake mode of generating smallint data",
+      "optionValues" : [ "RANGE", "TEMPLATE" ]
+    }, {
+      "key" : "int.fake.mode",
+      "type" : "enum<FakeMode>",
+      "defaultValue" : "RANGE",
+      "description" : "The fake mode of generating int data",
+      "optionValues" : [ "RANGE", "TEMPLATE" ]
+    }, {
+      "key" : "bigint.fake.mode",
+      "type" : "enum<FakeMode>",
+      "defaultValue" : "RANGE",
+      "description" : "The fake mode of generating bigint data",
+      "optionValues" : [ "RANGE", "TEMPLATE" ]
+    }, {
+      "key" : "float.fake.mode",
+      "type" : "enum<FakeMode>",
+      "defaultValue" : "RANGE",
+      "description" : "The fake mode of generating float data",
+      "optionValues" : [ "RANGE", "TEMPLATE" ]
+    }, {
+      "key" : "double.fake.mode",
+      "type" : "enum<FakeMode>",
+      "defaultValue" : "RANGE",
+      "description" : "The fake mode of generating double data",
+      "optionValues" : [ "RANGE", "TEMPLATE" ]
+    }, {
+      "key" : "rows",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : null,
+      "description" : "The row list of fake data output per degree of parallelism"
+    }, {
+      "key" : "row.num",
+      "type" : "int",
+      "defaultValue" : 5,
+      "description" : "The total number of data generated per degree of parallelism"
+    }, {
+      "key" : "split.num",
+      "type" : "int",
+      "defaultValue" : 1,
+      "description" : "The number of splits generated by the enumerator for each degree of parallelism"
+    }, {
+      "key" : "split.read-interval",
+      "type" : "int",
+      "defaultValue" : 1,
+      "description" : "The interval(mills) between two split reads in a reader"
+    }, {
+      "key" : "map.size",
+      "type" : "int",
+      "defaultValue" : 5,
+      "description" : "The size of map type that connector generated"
+    }, {
+      "key" : "array.size",
+      "type" : "int",
+      "defaultValue" : 5,
+      "description" : "The size of array type that connector generated"
+    }, {
+      "key" : "bytes.length",
+      "type" : "int",
+      "defaultValue" : 5,
+      "description" : "The length of bytes type that connector generated"
+    }, {
+      "key" : "vector.dimension",
+      "type" : "int",
+      "defaultValue" : 4,
+      "description" : "The vector dimension"
+    }, {
+      "key" : "binary.vector.dimension",
+      "type" : "int",
+      "defaultValue" : 8,
+      "description" : "The binary vector dimension , must be multiple of 8"
+    }, {
+      "key" : "date.year.template",
+      "type" : "list<int>",
+      "defaultValue" : null,
+      "description" : "The template list of year of date like 'yyyy', if user configured it, connector will randomly select an item from the template list"
+    }, {
+      "key" : "date.month.template",
+      "type" : "list<int>",
+      "defaultValue" : null,
+      "description" : "The template list of month of date like 'MM', if user configured it, connector will randomly select an item from the template list"
+    }, {
+      "key" : "date.day.template",
+      "type" : "list<int>",
+      "defaultValue" : null,
+      "description" : "The template list of day of date like 'dd', if user configured it, connector will randomly select an item from the template list"
+    }, {
+      "key" : "time.hour.template",
+      "type" : "list<int>",
+      "defaultValue" : null,
+      "description" : "The template list of hour of time like 'HH', if user configured it, connector will randomly select an item from the template list"
+    }, {
+      "key" : "time.minute.template",
+      "type" : "list<int>",
+      "defaultValue" : null,
+      "description" : "The template list of minute of time like 'mm', if user configured it, connector will randomly select an item from the template list"
+    }, {
+      "key" : "time.second.template",
+      "type" : "list<int>",
+      "defaultValue" : null,
+      "description" : "The template list of second of time like 'ss', if user configured it, connector will randomly select an item from the template list"
+    }, {
+      "key" : "parallelism",
+      "type" : "int",
+      "defaultValue" : 1,
+      "description" : "When parallelism is not specified in connector, the parallelism in env is used by default. When parallelism is specified, it will override the parallelism in env."
+    } ]
+  }, {
+    "name" : "Kafka",
+    "type" : "source",
+    "required" : [ {
+      "key" : "bootstrap.servers",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Kafka cluster address, separated by \",\".",
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "topic",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Kafka topic name. If there are multiple topics, use , to split, for example: \"tpc1,tpc2\".",
+      "category" : "exclusive",
+      "group" : 2
+    }, {
+      "key" : "tables_configs",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : null,
+      "description" : "SeaTunnel Multi Table Schema, acts on structured and unstructured data sources. such as file, assert, mongodb, jdbc, paimon, doris, etc",
+      "category" : "exclusive",
+      "group" : 2
+    }, {
+      "key" : "table_list",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : null,
+      "description" : "This parameter is deprecated, please use parameter: TableSchemaOptions.TABLE_CONFIGS. SeaTunnel Multi Table Schema, acts on structured and unstructured data sources. such as jdbc, paimon, doris, etc",
+      "category" : "exclusive",
+      "group" : 2
+    }, {
+      "key" : "start_mode.timestamp",
+      "type" : "long",
+      "defaultValue" : null,
+      "description" : "The time required for consumption mode to be timestamp.",
+      "category" : "conditional",
+      "group" : 3,
+      "conditionExpression" : "'start_mode' == timestamp",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "start_mode",
+          "expectValue" : "timestamp"
+        }
+      }
+    }, {
+      "key" : "partition-discovery.interval-millis",
+      "type" : "long",
+      "defaultValue" : -1,
+      "description" : "The interval for dynamically discovering topics and partitions.",
+      "category" : "conditional",
+      "group" : 4,
+      "conditionExpression" : "'ignore_no_leader_partition' == true",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "ignore_no_leader_partition",
+          "expectValue" : "true"
+        }
+      }
+    }, {
+      "key" : "start_mode.offsets",
+      "type" : "map<string,long>",
+      "defaultValue" : null,
+      "description" : "The offset required for consumption mode to be specific_offsets.",
+      "category" : "conditional",
+      "group" : 5,
+      "conditionExpression" : "'start_mode' == specific_offsets",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "start_mode",
+          "expectValue" : "specific_offsets"
+        }
+      }
+    }, {
+      "key" : "strip_schema_registry_header",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "Whether to strip the Confluent Schema Registry wire format header (magic byte, schema id and message indexes) before protobuf deserialization.",
+      "category" : "conditional",
+      "group" : 6,
+      "conditionExpression" : "'format' == PROTOBUF",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "format",
+          "expectValue" : "PROTOBUF"
+        }
+      }
+    } ],
+    "optional" : [ {
+      "key" : "start_mode",
+      "type" : "enum<StartMode>",
+      "defaultValue" : "GROUP_OFFSETS",
+      "description" : "The initial consumption pattern of consumers,there are several types:\n[earliest],[group_offsets],[latest],[specific_offsets],[timestamp]",
+      "optionValues" : [ "earliest", "group_offsets", "latest", "timestamp", "specific_offsets" ]
+    }, {
+      "key" : "pattern",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "If pattern is set to true,the regular expression for a pattern of topic names to read from. All topics in clients with names that match the specified regular expression will be subscribed by the consumer."
+    }, {
+      "key" : "consumer.group",
+      "type" : "string",
+      "defaultValue" : "SeaTunnel-Consumer-Group",
+      "description" : "Kafka consumer group id, used to distinguish different consumer groups."
+    }, {
+      "key" : "commit_on_checkpoint",
+      "type" : "boolean",
+      "defaultValue" : true,
+      "description" : "If true the consumer's offset will be periodically committed in the background."
+    }, {
+      "key" : "kafka.config",
+      "type" : "map<string,string>",
+      "defaultValue" : null,
+      "description" : "In addition to the above parameters that must be specified by the Kafka producer or consumer client, the user can also specify multiple non-mandatory parameters for the producer or consumer client, covering all the producer parameters specified in the official Kafka document."
+    }, {
+      "key" : "schema",
+      "type" : "map<string,object>",
+      "defaultValue" : null,
+      "description" : "SeaTunnel Schema"
+    }, {
+      "key" : "format",
+      "type" : "enum<MessageFormat>",
+      "defaultValue" : "JSON",
+      "description" : "Data format. The default format is json. Optional text format. The default field separator is \", \". If you customize the delimiter, add the \"field_delimiter\" option.",
+      "optionValues" : [ "JSON", "TEXT", "CANAL_JSON", "DEBEZIUM_JSON", "COMPATIBLE_DEBEZIUM_JSON", "COMPATIBLE_KAFKA_CONNECT_JSON", "OGG_JSON", "AVRO", "MAXWELL_JSON", "PROTOBUF", "NATIVE" ]
+    }, {
+      "key" : "debezium_record_include_schema",
+      "type" : "boolean",
+      "defaultValue" : true,
+      "description" : "Does the debezium record carry a schema."
+    }, {
+      "key" : "debezium_record_table_filter",
+      "type" : "tableIdentifierConfig",
+      "defaultValue" : null,
+      "description" : "Debezium record table filter."
+    }, {
+      "key" : "partition-discovery.interval-millis",
+      "type" : "long",
+      "defaultValue" : -1,
+      "description" : "The interval for dynamically discovering topics and partitions."
+    }, {
+      "key" : "reader_cache_queue_size",
+      "type" : "int",
+      "defaultValue" : 1024,
+      "description" : "The size of reader queue."
+    }, {
+      "key" : "ignore_no_leader_partition",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "Whether to ignore partitions that have no leader. If set to true, partitions without a leader will be skipped during partition discovery. If set to false (default), the connector will include all partitions regardless of leader status."
+    }, {
+      "key" : "parallelism",
+      "type" : "int",
+      "defaultValue" : 1,
+      "description" : "When parallelism is not specified in connector, the parallelism in env is used by default. When parallelism is specified, it will override the parallelism in env."
+    } ]
+  }, {
+    "name" : "Http",
+    "type" : "source",
+    "required" : [ {
+      "key" : "url",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Http request url",
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "schema",
+      "type" : "map<string,object>",
+      "defaultValue" : null,
+      "description" : "SeaTunnel Schema",
+      "category" : "conditional",
+      "group" : 2,
+      "conditionExpression" : "'format' == json",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "format",
+          "expectValue" : "json"
+        }
+      }
+    } ],
+    "optional" : [ {
+      "key" : "method",
+      "type" : "enum<HttpRequestMethod>",
+      "defaultValue" : "GET",
+      "description" : "Http request method",
+      "optionValues" : [ "get", "post" ]
+    }, {
+      "key" : "headers",
+      "type" : "map<string,string>",
+      "defaultValue" : null,
+      "description" : "Http request headers"
+    }, {
+      "key" : "params",
+      "type" : "map<string,string>",
+      "defaultValue" : null,
+      "description" : "Http request params"
+    }, {
+      "key" : "format",
+      "type" : "enum<ResponseFormat>",
+      "defaultValue" : "TEXT",
+      "description" : "Http response format",
+      "optionValues" : [ "json", "text" ]
+    }, {
+      "key" : "body",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Http request body"
+    }, {
+      "key" : "pageing",
+      "type" : "map<string,string>",
+      "defaultValue" : null,
+      "description" : "pageing"
+    }, {
+      "key" : "json_field",
+      "type" : "jsonField",
+      "defaultValue" : null,
+      "description" : "SeaTunnel json field.When partial json data is required, this parameter can be configured to obtain data"
+    }, {
+      "key" : "content_field",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "SeaTunnel content field.This parameter can get some json data, and there is no need to configure each field separately."
+    }, {
+      "key" : "poll_interval_millis",
+      "type" : "int",
+      "defaultValue" : null,
+      "description" : "Request http api interval(millis) in stream mode"
+    }, {
+      "key" : "retry",
+      "type" : "int",
+      "defaultValue" : null,
+      "description" : "The max retry times if request http return to IOException"
+    }, {
+      "key" : "retry_backoff_multiplier_ms",
+      "type" : "int",
+      "defaultValue" : 100,
+      "description" : "The retry-backoff times(millis) multiplier if request http failed"
+    }, {
+      "key" : "retry_backoff_max_ms",
+      "type" : "int",
+      "defaultValue" : 10000,
+      "description" : "The maximum retry-backoff times(millis) if request http failed"
+    }, {
+      "key" : "json_filed_missed_return_null",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "When the json field is missing, return null"
+    } ]
+  }, {
+    "name" : "Jdbc",
+    "type" : "source",
+    "required" : [ {
+      "key" : "url",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "url",
+      "fallbackKeys" : [ "base-url" ],
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "driver",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "driver",
+      "category" : "absolutely_required",
+      "group" : 1
+    } ],
+    "optional" : [ {
+      "key" : "username",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "user",
+      "fallbackKeys" : [ "user" ]
+    }, {
+      "key" : "password",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "password"
+    }, {
+      "key" : "connection_check_timeout_sec",
+      "type" : "int",
+      "defaultValue" : 30,
+      "description" : "connection check time second"
+    }, {
+      "key" : "fetch_size",
+      "type" : "int",
+      "defaultValue" : 0,
+      "description" : "For queries that return a large number of objects, you can configure the row fetch size used in the query to improve performance by reducing the number database hits required to satisfy the selection criteria. Zero means use jdbc default value."
+    }, {
+      "key" : "partition_column",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "partition column"
+    }, {
+      "key" : "partition_upper_bound",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "partition upper bound"
+    }, {
+      "key" : "partition_lower_bound",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "partition lower bound"
+    }, {
+      "key" : "partition_num",
+      "type" : "int",
+      "defaultValue" : null,
+      "description" : "partition num"
+    }, {
+      "key" : "compatible_mode",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The compatible mode of database, required when the database supports multiple compatible modes. For example, when using OceanBase database, you need to set it to 'mysql' or 'oracle'.",
+      "fallbackKeys" : [ "compatibleMode" ]
+    }, {
+      "key" : "split.string_split_mode",
+      "type" : "enum<StringSplitMode>",
+      "defaultValue" : "SAMPLE",
+      "description" : "Supports different string splitting algorithms. By default, `sample` is used to determine the split by sampling the string value. You can switch to `charset_based` to enable charset-based string splitting algorithm. When set to `charset_based`, the algorithm assumes characters of partition_column are within ASCII range 32-126, which covers most character-based splitting scenarios.",
+      "optionValues" : [ "sample", "charset_based" ]
+    }, {
+      "key" : "split.string_split_mode_collate",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Specifies the collation to use when string_split_mode is set to `charset_based` and the table has a special collation. If not specified, the database's default collation will be used."
+    }, {
+      "key" : "properties",
+      "type" : "map<string,string>",
+      "defaultValue" : null,
+      "description" : "additional connection configuration parameters"
+    }, {
+      "key" : "query",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "query"
+    }, {
+      "key" : "use_select_count",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "Use select count for table count"
+    }, {
+      "key" : "skip_analyze",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "Skip the analysis of table count"
+    }, {
+      "key" : "use_regex",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "Use regular expression for table path matching"
+    }, {
+      "key" : "table_path",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "table full path"
+    }, {
+      "key" : "where_condition",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Common row filter conditions for all tables/queries, must start with `where`. for example `where id > 100`"
+    }, {
+      "key" : "table_list",
+      "type" : "list<jdbcSourceTableConfig>",
+      "defaultValue" : null,
+      "description" : "table list config"
+    }, {
+      "key" : "split.size",
+      "type" : "int",
+      "defaultValue" : 8096,
+      "description" : "The split size (number of rows) of table snapshot, captured tables are split into multiple splits when read     of table."
+    }, {
+      "key" : "split.even-distribution.factor.upper-bound",
+      "type" : "double",
+      "defaultValue" : 100.0,
+      "description" : "The upper bound of split key distribution factor. The distribution factor is used to determine whether the table is evenly distribution or not. The table chunks would use evenly calculation optimization when the data distribution is even, and the query for splitting would happen when it is uneven. The distribution factor could be calculated by (MAX(id) - MIN(id) + 1) / rowCount."
+    }, {
+      "key" : "split.even-distribution.factor.lower-bound",
+      "type" : "double",
+      "defaultValue" : 0.05,
+      "description" : "The lower bound of split key distribution factor. The distribution factor is used to determine whether the table is evenly distribution or not. The table chunks would use evenly calculation optimization when the data distribution is even, and the query for splitting would happen when it is uneven. The distribution factor could be calculated by (MAX(id) - MIN(id) + 1) / rowCount."
+    }, {
+      "key" : "split.sample-sharding.threshold",
+      "type" : "int",
+      "defaultValue" : 1000,
+      "description" : "The threshold of estimated shard count to trigger the sample sharding strategy. When the distribution factor is outside the upper and lower bounds, and if the estimated shard count (approximateRowCnt/chunkSize) exceeds this threshold, the sample sharding strategy will be used. This strategy can help to handle large datasets more efficiently. The default value is 1000 shards."
+    }, {
+      "key" : "split.inverse-sampling.rate",
+      "type" : "int",
+      "defaultValue" : 1000,
+      "description" : "The inverse of the sampling rate for the sample sharding strategy. The value represents the denominator of the sampling rate fraction. For example, a value of 1000 means a sampling rate of 1/1000. This parameter is used when the sample sharding strategy is triggered."
+    }, {
+      "key" : "decimal_type_narrowing",
+      "type" : "boolean",
+      "defaultValue" : true,
+      "description" : "decimal type narrowing, if true, the decimal type will be narrowed to the int or long type if without loss of precision. Only support for Oracle at now."
+    }, {
+      "key" : "int_type_narrowing",
+      "type" : "boolean",
+      "defaultValue" : true,
+      "description" : "int type narrowing, if true, the tinyint(1) type will be narrowed to the boolean type if without loss of precision. Support for MySQL at now."
+    }, {
+      "key" : "dialect",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The appointed dialect, if it does not exist, is still obtained according to the url"
+    }, {
+      "key" : "parallelism",
+      "type" : "int",
+      "defaultValue" : 1,
+      "description" : "When parallelism is not specified in connector, the parallelism in env is used by default. When parallelism is specified, it will override the parallelism in env."
+    } ]
+  }, {
+    "name" : "Clickhouse",
+    "type" : "sink",
+    "required" : [ {
+      "key" : "host",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Clickhouse server host",
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "database",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Clickhouse database name",
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "table",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Clickhouse table name",
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "username",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Clickhouse server username",
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "password",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Clickhouse server password",
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "custom_sql",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "when data_save_mode selects CUSTOM_PROCESSING custom SQL",
+      "category" : "conditional",
+      "group" : 2,
+      "conditionExpression" : "'data_save_mode' == CUSTOM_PROCESSING",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "data_save_mode",
+          "expectValue" : "CUSTOM_PROCESSING"
+        }
+      }
+    } ],
+    "optional" : [ {
+      "key" : "server_time_zone",
+      "type" : "string",
+      "defaultValue" : "Asia/Shanghai",
+      "description" : "The session time zone in database server.If not set, then ZoneId.systemDefault() is used to determine the server time zone"
+    }, {
+      "key" : "clickhouse.config",
+      "type" : "map<string,string>",
+      "defaultValue" : { },
+      "description" : "Clickhouse custom config"
+    }, {
+      "key" : "bulk_size",
+      "type" : "int",
+      "defaultValue" : 20000,
+      "description" : "Bulk size of clickhouse jdbc"
+    }, {
+      "key" : "split_mode",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "Split mode when table is distributed engine"
+    }, {
+      "key" : "sharding_key",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "When split_mode is true, the sharding_key use for split"
+    }, {
+      "key" : "primary_key",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Mark the primary key column from clickhouse table, and based on primary key execute INSERT/UPDATE/DELETE to clickhouse table"
+    }, {
+      "key" : "support_upsert",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "Support upsert row by query primary key"
+    }, {
+      "key" : "allow_experimental_lightweight_delete",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "Allow experimental lightweight delete based on `*MergeTree` table engine"
+    }, {
+      "key" : "schema_save_mode",
+      "type" : "enum<SchemaSaveMode>",
+      "defaultValue" : "CREATE_SCHEMA_WHEN_NOT_EXIST",
+      "description" : "different treatment schemes are selected for the existing surface structure of the target side",
+      "optionValues" : [ "RECREATE_SCHEMA", "CREATE_SCHEMA_WHEN_NOT_EXIST", "ERROR_WHEN_SCHEMA_NOT_EXIST", "IGNORE" ]
+    }, {
+      "key" : "data_save_mode",
+      "type" : "enum<DataSaveMode>",
+      "defaultValue" : "APPEND_DATA",
+      "description" : "different processing schemes are selected for data existing data on the target side",
+      "optionValues" : [ "DROP_DATA", "APPEND_DATA", "CUSTOM_PROCESSING", "ERROR_WHEN_DATA_EXISTS" ]
+    }, {
+      "key" : "save_mode_create_template",
+      "type" : "string",
+      "defaultValue" : "CREATE TABLE IF NOT EXISTS `${database}`.`${table}` (\n${rowtype_primary_key},\n${rowtype_fields}\n) ENGINE = MergeTree()\nORDER BY (${rowtype_primary_key})\nPRIMARY KEY (${rowtype_primary_key})\nSETTINGS\n    index_granularity = 8192\nCOMMENT '${comment}';",
+      "description" : "Create table statement template, used to create Clickhouse table"
+    }, {
+      "key" : "multi_table_sink_replica",
+      "type" : "int",
+      "defaultValue" : 1,
+      "description" : "The replica number of multi table sink writer"
+    } ]
+  }, {
+    "name" : "ClickhouseFile",
+    "type" : "sink",
+    "required" : [ {
+      "key" : "host",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Clickhouse server host",
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "table",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Clickhouse table name",
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "database",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Clickhouse database name",
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "username",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Clickhouse server username",
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "password",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Clickhouse server password",
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "clickhouse_local_path",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "ClickhouseFile sink connector used clickhouse-local program's path",
+      "category" : "absolutely_required",
+      "group" : 1
+    } ],
+    "optional" : [ {
+      "key" : "copy_method",
+      "type" : "enum<ClickhouseFileCopyMethod>",
+      "defaultValue" : "SCP",
+      "description" : "The method of copy Clickhouse file",
+      "optionValues" : [ "SCP", "RSYNC" ]
+    }, {
+      "key" : "sharding_key",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "When split_mode is true, the sharding_key use for split"
+    }, {
+      "key" : "node_free_password",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "Because seatunnel need to use scp or rsync for file transfer, seatunnel need clickhouse server-side access. If each spark node and clickhouse server are configured with password-free login, you can configure this option to true, otherwise you need to configure the corresponding node password in the node_pass configuration"
+    }, {
+      "key" : "node_pass",
+      "type" : "list<nodePassConfig>",
+      "defaultValue" : null,
+      "description" : "The password of Clickhouse server node"
+    }, {
+      "key" : "compatible_mode",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "In the lower version of Clickhouse, the ClickhouseLocal program does not support the `--path` parameter, you need to use this mode to take other ways to realize the --path parameter function"
+    }, {
+      "key" : "file_fields_delimiter",
+      "type" : "string",
+      "defaultValue" : "\t",
+      "description" : "ClickhouseFile uses csv format to temporarily save data. If the data in the row contains the delimiter value of csv, it may cause program exceptions. Avoid this with this configuration. Value string has to be an exactly one character long"
+    }, {
+      "key" : "file_temp_path",
+      "type" : "string",
+      "defaultValue" : "/tmp/seatunnel/clickhouse-local/file",
+      "description" : "The directory where ClickhouseFile stores temporary files locally."
+    }, {
+      "key" : "key_path",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The path of rsync/ssh key file"
+    }, {
+      "key" : "server_time_zone",
+      "type" : "string",
+      "defaultValue" : "Asia/Shanghai",
+      "description" : "The session time zone in database server.If not set, then ZoneId.systemDefault() is used to determine the server time zone"
+    } ]
+  }, {
+    "name" : "S3File",
+    "type" : "sink",
+    "required" : [ {
+      "key" : "path",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The file path of target files",
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "bucket",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "S3 bucket",
+      "category" : "absolutely_required",
+      "group" : 2
+    }, {
+      "key" : "fs.s3a.endpoint",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "fs s3a endpoint",
+      "category" : "absolutely_required",
+      "group" : 3
+    }, {
+      "key" : "fs.s3a.aws.credentials.provider",
+      "type" : "enum<S3aAwsCredentialsProvider>",
+      "defaultValue" : "InstanceProfileCredentialsProvider",
+      "description" : "s3a aws credentials provider",
+      "optionValues" : [ "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider", "com.amazonaws.auth.InstanceProfileCredentialsProvider" ],
+      "category" : "absolutely_required",
+      "group" : 4
+    }, {
+      "key" : "access_key",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "S3 access key",
+      "category" : "conditional",
+      "group" : 5,
+      "conditionExpression" : "'fs.s3a.aws.credentials.provider' == org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "fs.s3a.aws.credentials.provider",
+          "expectValue" : "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider"
+        }
+      }
+    }, {
+      "key" : "secret_key",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "S3 secret key",
+      "category" : "conditional",
+      "group" : 5,
+      "conditionExpression" : "'fs.s3a.aws.credentials.provider' == org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "fs.s3a.aws.credentials.provider",
+          "expectValue" : "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider"
+        }
+      }
+    }, {
+      "key" : "row_delimiter",
+      "type" : "string",
+      "defaultValue" : "\n",
+      "description" : "The separator between rows in a file. Only needed by `text`, `csv` and `json` file format",
+      "category" : "conditional",
+      "group" : 6,
+      "conditionExpression" : "'file_format_type' == TEXT",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "TEXT"
+        }
+      }
+    }, {
+      "key" : "field_delimiter",
+      "type" : "string",
+      "defaultValue" : "\u0001",
+      "description" : "The separator between columns in a row of data. Only needed by `text` and `csv` file format",
+      "category" : "conditional",
+      "group" : 6,
+      "conditionExpression" : "'file_format_type' == TEXT",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "TEXT"
+        }
+      }
+    }, {
+      "key" : "compress_codec",
+      "type" : "enum<CompressFormat>",
+      "defaultValue" : "NONE",
+      "description" : "Txt file supported compression",
+      "optionValues" : [ "NONE", "LZO" ],
+      "category" : "conditional",
+      "group" : 6,
+      "conditionExpression" : "'file_format_type' == TEXT",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "TEXT"
+        }
+      }
+    }, {
+      "key" : "enable_header_write",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "false:dont write header,true:write header",
+      "category" : "conditional",
+      "group" : 6,
+      "conditionExpression" : "'file_format_type' == TEXT",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "TEXT"
+        }
+      }
+    }, {
+      "key" : "row_delimiter",
+      "type" : "string",
+      "defaultValue" : "\n",
+      "description" : "The separator between rows in a file. Only needed by `text`, `csv` and `json` file format",
+      "category" : "conditional",
+      "group" : 7,
+      "conditionExpression" : "'file_format_type' == CSV",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "CSV"
+        }
+      }
+    }, {
+      "key" : "compress_codec",
+      "type" : "enum<CompressFormat>",
+      "defaultValue" : "NONE",
+      "description" : "Txt file supported compression",
+      "optionValues" : [ "NONE", "LZO" ],
+      "category" : "conditional",
+      "group" : 7,
+      "conditionExpression" : "'file_format_type' == CSV",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "CSV"
+        }
+      }
+    }, {
+      "key" : "enable_header_write",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "false:dont write header,true:write header",
+      "category" : "conditional",
+      "group" : 7,
+      "conditionExpression" : "'file_format_type' == CSV",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "CSV"
+        }
+      }
+    }, {
+      "key" : "row_delimiter",
+      "type" : "string",
+      "defaultValue" : "\n",
+      "description" : "The separator between rows in a file. Only needed by `text`, `csv` and `json` file format",
+      "category" : "conditional",
+      "group" : 8,
+      "conditionExpression" : "'file_format_type' == JSON",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "JSON"
+        }
+      }
+    }, {
+      "key" : "compress_codec",
+      "type" : "enum<CompressFormat>",
+      "defaultValue" : "NONE",
+      "description" : "Txt file supported compression",
+      "optionValues" : [ "NONE", "LZO" ],
+      "category" : "conditional",
+      "group" : 8,
+      "conditionExpression" : "'file_format_type' == JSON",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "JSON"
+        }
+      }
+    }, {
+      "key" : "compress_codec",
+      "type" : "enum<CompressFormat>",
+      "defaultValue" : "NONE",
+      "description" : "Orc file supported compression",
+      "optionValues" : [ "NONE", "LZO", "SNAPPY", "LZ4", "ZLIB" ],
+      "category" : "conditional",
+      "group" : 9,
+      "conditionExpression" : "'file_format_type' == ORC",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "ORC"
+        }
+      }
+    }, {
+      "key" : "compress_codec",
+      "type" : "enum<CompressFormat>",
+      "defaultValue" : "NONE",
+      "description" : "Parquet file supported compression",
+      "optionValues" : [ "NONE", "LZO", "SNAPPY", "LZ4", "GZIP", "BROTLI", "ZSTD" ],
+      "category" : "conditional",
+      "group" : 10,
+      "conditionExpression" : "'file_format_type' == PARQUET",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "PARQUET"
+        }
+      }
+    }, {
+      "key" : "parquet_avro_write_fixed_as_int96",
+      "type" : "list<string>",
+      "defaultValue" : [ ],
+      "description" : "Support writing Parquet INT96 from a 12-byte field, only valid for parquet files.",
+      "category" : "conditional",
+      "group" : 10,
+      "conditionExpression" : "'file_format_type' == PARQUET",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "PARQUET"
+        }
+      }
+    }, {
+      "key" : "parquet_avro_write_timestamp_as_int96",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "Support writing Parquet INT96 from a timestamp, only valid for parquet files.",
+      "category" : "conditional",
+      "group" : 10,
+      "conditionExpression" : "'file_format_type' == PARQUET",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "PARQUET"
+        }
+      }
+    }, {
+      "key" : "xml_use_attr_format",
+      "type" : "boolean",
+      "defaultValue" : null,
+      "description" : "Specifies whether to process data using the tag attribute format, only valid for XML files.",
+      "category" : "conditional",
+      "group" : 11,
+      "conditionExpression" : "'file_format_type' == XML",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "XML"
+        }
+      }
+    }, {
+      "key" : "xml_root_tag",
+      "type" : "string",
+      "defaultValue" : "RECORDS",
+      "description" : "Specifies the tag name of the root element within the XML file, only valid for xml files, default value is 'RECORDS'",
+      "category" : "conditional",
+      "group" : 11,
+      "conditionExpression" : "'file_format_type' == XML",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "XML"
+        }
+      }
+    }, {
+      "key" : "xml_row_tag",
+      "type" : "string",
+      "defaultValue" : "RECORD",
+      "description" : "Specifies the tag name of the data rows within the XML file, only valid for xml files, default value is 'RECORD'",
+      "category" : "conditional",
+      "group" : 11,
+      "conditionExpression" : "'file_format_type' == XML",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "XML"
+        }
+      }
+    }, {
+      "key" : "file_name_expression",
+      "type" : "string",
+      "defaultValue" : "${transactionId}",
+      "description" : "Only used when `custom_filename` is true. `file_name_expression` describes the file expression which will be created into the `path`. We can add the variable `${now}` or `${uuid}` in the `file_name_expression`, like `test_${uuid}_${now}`,`${now}` represents the current time, and its format can be defined by specifying the option `filename_time_format`.",
+      "category" : "conditional",
+      "group" : 12,
+      "conditionExpression" : "'custom_filename' == true",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "custom_filename",
+          "expectValue" : "true"
+        }
+      }
+    }, {
+      "key" : "filename_time_format",
+      "type" : "string",
+      "defaultValue" : "yyyy.MM.dd",
+      "description" : "Only used when `custom_filename` is true. The time format of the path",
+      "category" : "conditional",
+      "group" : 12,
+      "conditionExpression" : "'custom_filename' == true",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "custom_filename",
+          "expectValue" : "true"
+        }
+      }
+    }, {
+      "key" : "partition_by",
+      "type" : "list<string>",
+      "defaultValue" : null,
+      "description" : "Partition keys list, Only used when have_partition is true",
+      "category" : "conditional",
+      "group" : 13,
+      "conditionExpression" : "'have_partition' == true",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "have_partition",
+          "expectValue" : "true"
+        }
+      }
+    }, {
+      "key" : "partition_dir_expression",
+      "type" : "string",
+      "defaultValue" : "${k0}=${v0}/${k1}=${v1}/.../${kn}=${vn}/",
+      "description" : "Only used when have_partition is true. If the `partition_by` is specified, we will generate the corresponding partition directory based on the partition information, and the final file will be placed in the partition directory. Default `partition_dir_expression` is `${k0}=${v0}/${k1}=${v1}/.../${kn}=${vn}/`. `k0` is the first partition field and `v0` is the value of the first partition field.",
+      "category" : "conditional",
+      "group" : 13,
+      "conditionExpression" : "'have_partition' == true",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "have_partition",
+          "expectValue" : "true"
+        }
+      }
+    }, {
+      "key" : "is_partition_field_write_in_file",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "Only used when have_partition is true. Whether to write partition fields to file",
+      "category" : "conditional",
+      "group" : 13,
+      "conditionExpression" : "'have_partition' == true",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "have_partition",
+          "expectValue" : "true"
+        }
+      }
+    }, {
+      "key" : "encoding",
+      "type" : "string",
+      "defaultValue" : "UTF-8",
+      "description" : "The encoding of output file, e.g. UTF-8, ISO-8859-1....",
+      "category" : "conditional",
+      "group" : 14,
+      "conditionExpression" : "'file_format_type' == TEXT || 'file_format_type' == JSON || 'file_format_type' == CSV || 'file_format_type' == XML",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "file_format_type",
+          "expectValue" : "TEXT"
+        },
+        "operator" : "OR",
+        "next" : {
+          "condition" : {
+            "key" : "file_format_type",
+            "expectValue" : "JSON"
+          },
+          "operator" : "OR",
+          "next" : {
+            "condition" : {
+              "key" : "file_format_type",
+              "expectValue" : "CSV"
+            },
+            "operator" : "OR",
+            "next" : {
+              "condition" : {
+                "key" : "file_format_type",
+                "expectValue" : "XML"
+              }
+            }
+          }
+        }
+      }
+    } ],
+    "optional" : [ {
+      "key" : "schema_save_mode",
+      "type" : "enum<SchemaSaveMode>",
+      "defaultValue" : "CREATE_SCHEMA_WHEN_NOT_EXIST",
+      "description" : "Before the synchronization task begins, process the existing path",
+      "optionValues" : [ "RECREATE_SCHEMA", "CREATE_SCHEMA_WHEN_NOT_EXIST", "ERROR_WHEN_SCHEMA_NOT_EXIST", "IGNORE" ]
+    }, {
+      "key" : "data_save_mode",
+      "type" : "enum<DataSaveMode>",
+      "defaultValue" : "APPEND_DATA",
+      "description" : "Before the synchronization task begins, different processing of data files that already exist in the directory",
+      "optionValues" : [ "DROP_DATA", "APPEND_DATA", "ERROR_WHEN_DATA_EXISTS" ]
+    }, {
+      "key" : "hadoop_s3_properties",
+      "type" : "map<string,string>",
+      "defaultValue" : null,
+      "description" : "S3 properties"
+    }, {
+      "key" : "file_format_type",
+      "type" : "enum<FileFormat>",
+      "defaultValue" : "CSV",
+      "description" : "File format type, e.g. csv, orc, parquet, text",
+      "optionValues" : [ "CSV", "TEXT", "PARQUET", "ORC", "JSON", "EXCEL", "XML", "BINARY", "CANAL_JSON", "DEBEZIUM_JSON", "MAXWELL_JSON", "MARKDOWN" ]
+    }, {
+      "key" : "custom_filename",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "Whether custom the output filename"
+    }, {
+      "key" : "have_partition",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "Whether need partition when write data"
+    }, {
+      "key" : "sink_columns",
+      "type" : "list<string>",
+      "defaultValue" : null,
+      "description" : "Which columns need be wrote to file"
+    }, {
+      "key" : "is_enable_transaction",
+      "type" : "boolean",
+      "defaultValue" : true,
+      "description" : "If or not enable transaction"
+    }, {
+      "key" : "date_format",
+      "type" : "enum<Formatter>",
+      "defaultValue" : "YYYY_MM_DD",
+      "description" : "Date format",
+      "optionValues" : [ "YYYY_MM_DD", "YYYY_M_D", "YYYY_MM_DD_SPOT", "YYYY_MM_DD_SLASH" ]
+    }, {
+      "key" : "datetime_format",
+      "type" : "enum<Formatter>",
+      "defaultValue" : "YYYY_MM_DD_HH_MM_SS",
+      "description" : "Datetime format",
+      "optionValues" : [ "YYYY_MM_DD_HH_MM_SS", "YYYY_MM_DD_HH_MM_SS_SSSSSS", "YYYY_MM_DD_HH_MM_SS_SPOT", "YYYY_MM_DD_HH_MM_SS_SLASH", "YYYY_M_D_HH_MM_SLASH", "YYYY_M_D_HH_MM_ISO8601", "YYYY_M_D_HH_MM_SS_SLASH", "YYYY_M_D_HH_MM_SS_ISO8601", "YYYY_MM_DD_HH_MM_SS_NO_SPLIT", "YYYY_MM_DD_HH_MM_SS_ISO8601", "YYYY_MM_DD_HH_MM_SS_SSS_ISO8601", "YYYY_MM_DD_HH_MM_SS_SSSSSS_ISO8601", "YYYY_MM_DD_HH_MM_SS_SSSSSSSSS_ISO8601" ]
+    }, {
+      "key" : "time_format",
+      "type" : "enum<Formatter>",
+      "defaultValue" : "HH_MM_SS",
+      "description" : "Time format",
+      "optionValues" : [ "HH_MM_SS", "HH_MM_SS_SSS" ]
+    }, {
+      "key" : "single_file_mode",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "Whether to write all data to a single file in each parallelism task"
+    }, {
+      "key" : "batch_size",
+      "type" : "int",
+      "defaultValue" : 1000000,
+      "description" : "The batch size of each split file"
+    }, {
+      "key" : "create_empty_file_when_no_data",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "Whether to generate an empty file when there is no data to write"
+    }, {
+      "key" : "multi_table_sink_replica",
+      "type" : "int",
+      "defaultValue" : 1,
+      "description" : "The replica number of multi table sink writer"
+    }, {
+      "key" : "filename_extension",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Filter filename extension, which used for filtering files with specific extension. Example: `csv` `.txt` `json` `.xml`."
+    }, {
+      "key" : "tmp_path",
+      "type" : "string",
+      "defaultValue" : "/tmp/seatunnel",
+      "description" : "Data write temporary path"
+    } ]
+  }, {
+    "name" : "Console",
+    "type" : "sink",
+    "required" : [ ],
+    "optional" : [ {
+      "key" : "log.print.data",
+      "type" : "boolean",
+      "defaultValue" : true,
+      "description" : "Flag to determine whether data should be printed in the logs."
+    }, {
+      "key" : "log.print.delay.ms",
+      "type" : "int",
+      "defaultValue" : 0,
+      "description" : "Delay in milliseconds between printing each data item to the logs."
+    }, {
+      "key" : "multi_table_sink_replica",
+      "type" : "int",
+      "defaultValue" : 1,
+      "description" : "The replica number of multi table sink writer"
+    } ]
+  }, {
+    "name" : "Kafka",
+    "type" : "sink",
+    "required" : [ {
+      "key" : "topic",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Kafka topic name. If there are multiple topics, use , to split, for example: \"tpc1,tpc2\".",
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "bootstrap.servers",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Kafka cluster address, separated by \",\".",
+      "category" : "absolutely_required",
+      "group" : 1
+    } ],
+    "optional" : [ {
+      "key" : "format",
+      "type" : "enum<MessageFormat>",
+      "defaultValue" : "JSON",
+      "description" : "Data format. The default format is json. Optional text format. The default field separator is \", \". If you customize the delimiter, add the \"field_delimiter\" option.",
+      "optionValues" : [ "JSON", "TEXT", "CANAL_JSON", "DEBEZIUM_JSON", "COMPATIBLE_DEBEZIUM_JSON", "COMPATIBLE_KAFKA_CONNECT_JSON", "OGG_JSON", "AVRO", "MAXWELL_JSON", "PROTOBUF", "NATIVE" ]
+    }, {
+      "key" : "kafka.config",
+      "type" : "map<string,string>",
+      "defaultValue" : null,
+      "description" : "In addition to the above parameters that must be specified by the Kafka producer or consumer client, the user can also specify multiple non-mandatory parameters for the producer or consumer client, covering all the producer parameters specified in the official Kafka document."
+    }, {
+      "key" : "assign_partitions",
+      "type" : "list<string>",
+      "defaultValue" : null,
+      "description" : "We can decide which partition to send based on the content of the message. The function of this parameter is to distribute information."
+    }, {
+      "key" : "transaction_prefix",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "If semantic is specified as EXACTLY_ONCE, the producer will write all messages in a Kafka transaction. Kafka distinguishes different transactions by different transactionId. This parameter is prefix of kafka transactionId, make sure different job use different prefix."
+    }, {
+      "key" : "semantics",
+      "type" : "enum<KafkaSemantics>",
+      "defaultValue" : "NON",
+      "description" : "Semantics that can be chosen EXACTLY_ONCE/AT_LEAST_ONCE/NON, default NON.",
+      "optionValues" : [ "NON", "AT_LEAST_ONCE", "EXACTLY_ONCE" ]
+    }, {
+      "key" : "partition",
+      "type" : "int",
+      "defaultValue" : null,
+      "description" : "We can specify the partition, all messages will be sent to this partition."
+    }, {
+      "key" : "partition_key_fields",
+      "type" : "list<string>",
+      "defaultValue" : null,
+      "description" : "Configure which fields are used as the key of the kafka message."
+    } ]
+  }, {
+    "name" : "Http",
+    "type" : "sink",
+    "required" : [ {
+      "key" : "url",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Http request url",
+      "category" : "absolutely_required",
+      "group" : 1
+    } ],
+    "optional" : [ {
+      "key" : "headers",
+      "type" : "map<string,string>",
+      "defaultValue" : null,
+      "description" : "Http request headers"
+    }, {
+      "key" : "params",
+      "type" : "map<string,string>",
+      "defaultValue" : null,
+      "description" : "Http request params"
+    }, {
+      "key" : "retry",
+      "type" : "int",
+      "defaultValue" : null,
+      "description" : "The max retry times if request http return to IOException"
+    }, {
+      "key" : "retry_backoff_multiplier_ms",
+      "type" : "int",
+      "defaultValue" : 100,
+      "description" : "The retry-backoff times(millis) multiplier if request http failed"
+    }, {
+      "key" : "retry_backoff_max_ms",
+      "type" : "int",
+      "defaultValue" : 10000,
+      "description" : "The maximum retry-backoff times(millis) if request http failed"
+    }, {
+      "key" : "array_mode",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "Send data as a JSON array when true, or as a single JSON object when false (default)"
+    }, {
+      "key" : "batch_size",
+      "type" : "int",
+      "defaultValue" : 1,
+      "description" : "The batch size of records to send in one HTTP request. Only works when array_mode is true"
+    }, {
+      "key" : "request_interval_ms",
+      "type" : "int",
+      "defaultValue" : 0,
+      "description" : "The interval milliseconds between two HTTP requests"
+    }, {
+      "key" : "multi_table_sink_replica",
+      "type" : "int",
+      "defaultValue" : 1,
+      "description" : "The replica number of multi table sink writer"
+    } ]
+  }, {
+    "name" : "Jdbc",
+    "type" : "sink",
+    "required" : [ {
+      "key" : "url",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "url",
+      "fallbackKeys" : [ "base-url" ],
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "driver",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "driver",
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "schema_save_mode",
+      "type" : "enum<SchemaSaveMode>",
+      "defaultValue" : "CREATE_SCHEMA_WHEN_NOT_EXIST",
+      "description" : "schema_save_mode",
+      "optionValues" : [ "RECREATE_SCHEMA", "CREATE_SCHEMA_WHEN_NOT_EXIST", "ERROR_WHEN_SCHEMA_NOT_EXIST", "IGNORE" ],
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "data_save_mode",
+      "type" : "enum<DataSaveMode>",
+      "defaultValue" : "APPEND_DATA",
+      "description" : "data_save_mode",
+      "optionValues" : [ "DROP_DATA", "APPEND_DATA", "CUSTOM_PROCESSING", "ERROR_WHEN_DATA_EXISTS" ],
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "xa_data_source_class_name",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "data source class name",
+      "category" : "conditional",
+      "group" : 2,
+      "conditionExpression" : "'is_exactly_once' == true",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "is_exactly_once",
+          "expectValue" : "true"
+        }
+      }
+    }, {
+      "key" : "max_commit_attempts",
+      "type" : "int",
+      "defaultValue" : 3,
+      "description" : "max commit attempts",
+      "category" : "conditional",
+      "group" : 2,
+      "conditionExpression" : "'is_exactly_once' == true",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "is_exactly_once",
+          "expectValue" : "true"
+        }
+      }
+    }, {
+      "key" : "transaction_timeout_sec",
+      "type" : "int",
+      "defaultValue" : -1,
+      "description" : "transaction timeout (second)",
+      "category" : "conditional",
+      "group" : 2,
+      "conditionExpression" : "'is_exactly_once' == true",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "is_exactly_once",
+          "expectValue" : "true"
+        }
+      }
+    }, {
+      "key" : "max_retries",
+      "type" : "int",
+      "defaultValue" : 0,
+      "description" : "max_retries",
+      "category" : "conditional",
+      "group" : 3,
+      "conditionExpression" : "'is_exactly_once' == false",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "is_exactly_once",
+          "expectValue" : "false"
+        }
+      }
+    }, {
+      "key" : "database",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "database",
+      "category" : "conditional",
+      "group" : 4,
+      "conditionExpression" : "'generate_sink_sql' == true",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "generate_sink_sql",
+          "expectValue" : "true"
+        }
+      }
+    }, {
+      "key" : "query",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "query",
+      "category" : "conditional",
+      "group" : 5,
+      "conditionExpression" : "'generate_sink_sql' == false",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "generate_sink_sql",
+          "expectValue" : "false"
+        }
+      }
+    }, {
+      "key" : "custom_sql",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "custom_sql",
+      "category" : "conditional",
+      "group" : 6,
+      "conditionExpression" : "'data_save_mode' == CUSTOM_PROCESSING",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "data_save_mode",
+          "expectValue" : "CUSTOM_PROCESSING"
+        }
+      }
+    } ],
+    "optional" : [ {
+      "key" : "create_index",
+      "type" : "boolean",
+      "defaultValue" : true,
+      "description" : "Create index or not when auto create table"
+    }, {
+      "key" : "username",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "user",
+      "fallbackKeys" : [ "user" ]
+    }, {
+      "key" : "password",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "password"
+    }, {
+      "key" : "connection_check_timeout_sec",
+      "type" : "int",
+      "defaultValue" : 30,
+      "description" : "connection check time second"
+    }, {
+      "key" : "batch_size",
+      "type" : "int",
+      "defaultValue" : 1000,
+      "description" : "batch size"
+    }, {
+      "key" : "is_exactly_once",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "exactly once"
+    }, {
+      "key" : "generate_sink_sql",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "generate sql using the database table"
+    }, {
+      "key" : "auto_commit",
+      "type" : "boolean",
+      "defaultValue" : true,
+      "description" : "auto commit"
+    }, {
+      "key" : "primary_keys",
+      "type" : "list<string>",
+      "defaultValue" : null,
+      "description" : "primary keys"
+    }, {
+      "key" : "is_primary_key_updated",
+      "type" : "boolean",
+      "defaultValue" : true,
+      "description" : "is the primary key updated when performing an update operation"
+    }, {
+      "key" : "support_upsert_by_insert_only",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "support upsert by insert only"
+    }, {
+      "key" : "use_copy_statement",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "support copy in statement (postgresql)"
+    }, {
+      "key" : "compatible_mode",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The compatible mode of database, required when the database supports multiple compatible modes. For example, when using OceanBase database, you need to set it to 'mysql' or 'oracle'.",
+      "fallbackKeys" : [ "compatibleMode" ]
+    }, {
+      "key" : "enable_upsert",
+      "type" : "boolean",
+      "defaultValue" : true,
+      "description" : "enable upsert by primary_keys exist"
+    }, {
+      "key" : "field_ide",
+      "type" : "enum<FieldIdeEnum>",
+      "defaultValue" : null,
+      "description" : "Whether case conversion is required",
+      "optionValues" : [ "ORIGINAL", "UPPERCASE", "LOWERCASE" ]
+    }, {
+      "key" : "tablePrefix",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The table prefix name added when the table is automatically created"
+    }, {
+      "key" : "tableSuffix",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The table suffix name added when the table is automatically created"
+    }, {
+      "key" : "multi_table_sink_replica",
+      "type" : "int",
+      "defaultValue" : 1,
+      "description" : "The replica number of multi table sink writer"
+    }, {
+      "key" : "dialect",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The appointed dialect, if it does not exist, is still obtained according to the url"
+    } ]
+  }, {
+    "name" : "DefineSinkType",
+    "type" : "transform",
+    "required" : [ {
+      "key" : "columns",
+      "type" : "list<defineColumnType>",
+      "defaultValue" : null,
+      "description" : "The columns to be defined, the name and type of the column must be set",
+      "category" : "absolutely_required",
+      "group" : 1
+    } ],
+    "optional" : [ {
+      "key" : "table_transform",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : [ ],
+      "description" : "The table transform config"
+    }, {
+      "key" : "table_match_regex",
+      "type" : "string",
+      "defaultValue" : ".*",
+      "description" : "The regex to match the table path"
+    } ]
+  }, {
+    "name" : "Copy",
+    "type" : "transform",
+    "required" : [ {
+      "key" : "src_field",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Src field you want to copy",
+      "category" : "bundled",
+      "group" : 1
+    }, {
+      "key" : "dest_field",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Copy Src field to Dest field",
+      "category" : "bundled",
+      "group" : 1
+    }, {
+      "key" : "fields",
+      "type" : "map<string,string>",
+      "defaultValue" : null,
+      "description" : "Specify the field copy relationship between input and output",
+      "category" : "bundled",
+      "group" : 2
+    } ],
+    "optional" : [ {
+      "key" : "table_transform",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : [ ],
+      "description" : "The table transform config"
+    }, {
+      "key" : "table_match_regex",
+      "type" : "string",
+      "defaultValue" : ".*",
+      "description" : "The regex to match the table path"
+    } ]
+  }, {
+    "name" : "DynamicCompile",
+    "type" : "transform",
+    "required" : [ {
+      "key" : "source_code",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "source_code to compile",
+      "category" : "conditional",
+      "group" : 1,
+      "conditionExpression" : "'compile_pattern' == SOURCE_CODE",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "compile_pattern",
+          "expectValue" : "SOURCE_CODE"
+        }
+      }
+    }, {
+      "key" : "absolute_path",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "absolute_path",
+      "category" : "conditional",
+      "group" : 2,
+      "conditionExpression" : "'compile_pattern' == ABSOLUTE_PATH",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "compile_pattern",
+          "expectValue" : "ABSOLUTE_PATH"
+        }
+      }
+    } ],
+    "optional" : [ {
+      "key" : "compile_language",
+      "type" : "enum<CompileLanguage>",
+      "defaultValue" : null,
+      "description" : "compile language",
+      "optionValues" : [ "GROOVY", "JAVA", "SCALA" ]
+    }, {
+      "key" : "compile_pattern",
+      "type" : "enum<CompilePattern>",
+      "defaultValue" : "SOURCE_CODE",
+      "description" : "compile_pattern",
+      "optionValues" : [ "SOURCE_CODE", "ABSOLUTE_PATH" ]
+    }, {
+      "key" : "table_transform",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : [ ],
+      "description" : "The table transform config"
+    }, {
+      "key" : "table_match_regex",
+      "type" : "string",
+      "defaultValue" : ".*",
+      "description" : "The regex to match the table path"
+    } ]
+  }, {
+    "name" : "FieldMapper",
+    "type" : "transform",
+    "required" : [ ],
+    "optional" : [ {
+      "key" : "field_mapper",
+      "type" : "map<string,string>",
+      "defaultValue" : null,
+      "description" : "Specify the field mapping relationship between input and output"
+    }, {
+      "key" : "table_transform",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : [ ],
+      "description" : "The table transform config"
+    }, {
+      "key" : "table_match_regex",
+      "type" : "string",
+      "defaultValue" : ".*",
+      "description" : "The regex to match the table path"
+    } ]
+  }, {
+    "name" : "Filter",
+    "type" : "transform",
+    "required" : [ ],
+    "optional" : [ {
+      "key" : "include_fields",
+      "type" : "list<string>",
+      "defaultValue" : null,
+      "description" : "The list of fields that need to be kept.",
+      "fallbackKeys" : [ "fields" ]
+    }, {
+      "key" : "exclude_fields",
+      "type" : "list<string>",
+      "defaultValue" : null,
+      "description" : "The list of fields that need to be deleted"
+    }, {
+      "key" : "table_transform",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : [ ],
+      "description" : "The table transform config"
+    }, {
+      "key" : "table_match_regex",
+      "type" : "string",
+      "defaultValue" : ".*",
+      "description" : "The regex to match the table path"
+    } ]
+  }, {
+    "name" : "FilterRowKind",
+    "type" : "transform",
+    "required" : [ ],
+    "optional" : [ {
+      "key" : "exclude_kinds",
+      "type" : "list<enum<RowKind>>",
+      "defaultValue" : null,
+      "description" : "the row kinds to exclude"
+    }, {
+      "key" : "include_kinds",
+      "type" : "list<enum<RowKind>>",
+      "defaultValue" : null,
+      "description" : "the row kinds to include"
+    }, {
+      "key" : "table_transform",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : [ ],
+      "description" : "The table transform config"
+    }, {
+      "key" : "table_match_regex",
+      "type" : "string",
+      "defaultValue" : ".*",
+      "description" : "The regex to match the table path"
+    } ]
+  }, {
+    "name" : "JsonPath",
+    "type" : "transform",
+    "required" : [ ],
+    "optional" : [ {
+      "key" : "columns",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : null,
+      "description" : "columns"
+    }, {
+      "key" : "table_transform",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : [ ],
+      "description" : "The table transform config"
+    }, {
+      "key" : "table_match_regex",
+      "type" : "string",
+      "defaultValue" : ".*",
+      "description" : "The regex to match the table path"
+    }, {
+      "key" : "row_error_handle_way",
+      "type" : "enum<ErrorHandleWay>",
+      "defaultValue" : "FAIL",
+      "description" : "The processing method of data format error. The default value is fail, and the optional value is (fail, skip). When fail is selected, data format error will block and an exception will be thrown. When skip is selected, data format error will skip this line data.",
+      "optionValues" : [ "FAIL", "SKIP", "ROUTE_TO_TABLE" ]
+    } ]
+  }, {
+    "name" : "Metadata",
+    "type" : "transform",
+    "required" : [ ],
+    "optional" : [ {
+      "key" : "metadata_fields",
+      "type" : "map<string,string>",
+      "defaultValue" : null,
+      "description" : "Specify the metadata field relationship between input and output"
+    }, {
+      "key" : "table_transform",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : [ ],
+      "description" : "The table transform config"
+    }, {
+      "key" : "table_match_regex",
+      "type" : "string",
+      "defaultValue" : ".*",
+      "description" : "The regex to match the table path"
+    } ]
+  }, {
+    "name" : "Embedding",
+    "type" : "transform",
+    "required" : [ {
+      "key" : "api_key",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The API key of LLM/Embedding",
+      "category" : "conditional",
+      "group" : 1,
+      "conditionExpression" : "'model_provider' == AMAZON",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "model_provider",
+          "expectValue" : "AMAZON"
+        }
+      }
+    }, {
+      "key" : "secret_key",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The Secret key of LLM/Embedding",
+      "category" : "conditional",
+      "group" : 1,
+      "conditionExpression" : "'model_provider' == AMAZON",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "model_provider",
+          "expectValue" : "AMAZON"
+        }
+      }
+    }, {
+      "key" : "aws_region",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The AWS region for Amazon Bedrock service.",
+      "category" : "conditional",
+      "group" : 1,
+      "conditionExpression" : "'model_provider' == AMAZON",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "model_provider",
+          "expectValue" : "AMAZON"
+        }
+      }
+    }, {
+      "key" : "model",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The model of LLM/Embedding, eg: if the model provider is OpenAI LLM, the model should be gpt-3.5-turbo/gpt-4o-mini, etc.",
+      "category" : "conditional",
+      "group" : 1,
+      "conditionExpression" : "'model_provider' == AMAZON",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "model_provider",
+          "expectValue" : "AMAZON"
+        }
+      }
+    }, {
+      "key" : "dimension",
+      "type" : "int",
+      "defaultValue" : 2048,
+      "description" : "dimension",
+      "category" : "conditional",
+      "group" : 1,
+      "conditionExpression" : "'model_provider' == AMAZON",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "model_provider",
+          "expectValue" : "AMAZON"
+        }
+      }
+    }, {
+      "key" : "api_key",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The API key of LLM/Embedding",
+      "category" : "conditional",
+      "group" : 2,
+      "conditionExpression" : "'model_provider' == OPENAI || 'model_provider' == DOUBAO",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "model_provider",
+          "expectValue" : "OPENAI"
+        },
+        "operator" : "OR",
+        "next" : {
+          "condition" : {
+            "key" : "model_provider",
+            "expectValue" : "DOUBAO"
+          }
+        }
+      }
+    }, {
+      "key" : "api_key",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The API key of LLM/Embedding",
+      "category" : "conditional",
+      "group" : 3,
+      "conditionExpression" : "'model_provider' == QIANFAN",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "model_provider",
+          "expectValue" : "QIANFAN"
+        }
+      }
+    }, {
+      "key" : "secret_key",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The Secret key of LLM/Embedding",
+      "category" : "conditional",
+      "group" : 3,
+      "conditionExpression" : "'model_provider' == QIANFAN",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "model_provider",
+          "expectValue" : "QIANFAN"
+        }
+      }
+    }, {
+      "key" : "oauth_path",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The Oauth path of LLM/Embedding",
+      "category" : "conditional",
+      "group" : 3,
+      "conditionExpression" : "'model_provider' == QIANFAN",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "model_provider",
+          "expectValue" : "QIANFAN"
+        }
+      }
+    }, {
+      "key" : "custom_config",
+      "type" : "map<string,object>",
+      "defaultValue" : null,
+      "description" : "The custom config of the custom model.",
+      "category" : "conditional",
+      "group" : 4,
+      "conditionExpression" : "'model_provider' == CUSTOM",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "model_provider",
+          "expectValue" : "CUSTOM"
+        }
+      }
+    }, {
+      "key" : "dimension",
+      "type" : "int",
+      "defaultValue" : 2048,
+      "description" : "dimension",
+      "category" : "conditional",
+      "group" : 5,
+      "conditionExpression" : "'model_provider' == ZHIPU",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "model_provider",
+          "expectValue" : "ZHIPU"
+        }
+      }
+    } ],
+    "optional" : [ {
+      "key" : "model_provider",
+      "type" : "enum<ModelProvider>",
+      "defaultValue" : null,
+      "description" : "The model provider of LLM/Embedding",
+      "optionValues" : [ "AMAZON", "OPENAI", "DOUBAO", "QIANFAN", "KIMIAI", "DEEPSEEK", "MICROSOFT", "ZHIPU", "CUSTOM", "LOCAL" ]
+    }, {
+      "key" : "model",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The model of LLM/Embedding, eg: if the model provider is OpenAI LLM, the model should be gpt-3.5-turbo/gpt-4o-mini, etc."
+    }, {
+      "key" : "vectorization_fields",
+      "type" : "map<string,object>",
+      "defaultValue" : null,
+      "description" : "Specify the field vectorization relationship between input and output. Supports multiple formats: 1. String format: 'fieldName' (defaults to text modality) 2. Object format with modality and format: {field: 'fieldName', modality: 'modalityType', format: 'formatType'} where modality can be 'image/jpeg', 'video/mp4' etc. , format can be 'url', 'binary'. "
+    }, {
+      "key" : "api_path",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The API of LLM/Embedding",
+      "fallbackKeys" : [ "openai.api_path" ]
+    }, {
+      "key" : "single_vectorized_input_number",
+      "type" : "int",
+      "defaultValue" : 1,
+      "description" : "The number of single vectorized inputs, default is 1 , which means 1 inputs will be vectorized in one request , eg: qianfan only allows a maximum of 16 simultaneous messages, depending on your own settings, etc"
+    }, {
+      "key" : "process_batch_size",
+      "type" : "int",
+      "defaultValue" : 100,
+      "description" : "The row batch size of each process",
+      "fallbackKeys" : [ "inference_batch_size" ]
+    }, {
+      "key" : "table_transform",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : [ ],
+      "description" : "The table transform config"
+    }, {
+      "key" : "table_match_regex",
+      "type" : "string",
+      "defaultValue" : ".*",
+      "description" : "The regex to match the table path"
+    } ]
+  }, {
+    "name" : "LLM",
+    "type" : "transform",
+    "required" : [ {
+      "key" : "api_key",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The API key of LLM/Embedding",
+      "category" : "conditional",
+      "group" : 1,
+      "conditionExpression" : "'model_provider' == OPENAI || 'model_provider' == DOUBAO || 'model_provider' == MICROSOFT",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "model_provider",
+          "expectValue" : "OPENAI"
+        },
+        "operator" : "OR",
+        "next" : {
+          "condition" : {
+            "key" : "model_provider",
+            "expectValue" : "DOUBAO"
+          },
+          "operator" : "OR",
+          "next" : {
+            "condition" : {
+              "key" : "model_provider",
+              "expectValue" : "MICROSOFT"
+            }
+          }
+        }
+      }
+    }, {
+      "key" : "api_key",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The API key of LLM/Embedding",
+      "category" : "conditional",
+      "group" : 2,
+      "conditionExpression" : "'model_provider' == QIANFAN",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "model_provider",
+          "expectValue" : "QIANFAN"
+        }
+      }
+    }, {
+      "key" : "secret_key",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The Secret key of LLM/Embedding",
+      "category" : "conditional",
+      "group" : 2,
+      "conditionExpression" : "'model_provider' == QIANFAN",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "model_provider",
+          "expectValue" : "QIANFAN"
+        }
+      }
+    }, {
+      "key" : "oauth_path",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The Oauth path of LLM/Embedding",
+      "category" : "conditional",
+      "group" : 2,
+      "conditionExpression" : "'model_provider' == QIANFAN",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "model_provider",
+          "expectValue" : "QIANFAN"
+        }
+      }
+    }, {
+      "key" : "custom_config",
+      "type" : "map<string,object>",
+      "defaultValue" : null,
+      "description" : "The custom config of the custom model.",
+      "category" : "conditional",
+      "group" : 3,
+      "conditionExpression" : "'model_provider' == CUSTOM",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "model_provider",
+          "expectValue" : "CUSTOM"
+        }
+      }
+    } ],
+    "optional" : [ {
+      "key" : "model_provider",
+      "type" : "enum<ModelProvider>",
+      "defaultValue" : null,
+      "description" : "The model provider of LLM/Embedding",
+      "optionValues" : [ "AMAZON", "OPENAI", "DOUBAO", "QIANFAN", "KIMIAI", "DEEPSEEK", "MICROSOFT", "ZHIPU", "CUSTOM", "LOCAL" ]
+    }, {
+      "key" : "model",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The model of LLM/Embedding, eg: if the model provider is OpenAI LLM, the model should be gpt-3.5-turbo/gpt-4o-mini, etc."
+    }, {
+      "key" : "prompt",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The prompt of LLM"
+    }, {
+      "key" : "api_path",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The API of LLM/Embedding",
+      "fallbackKeys" : [ "openai.api_path" ]
+    }, {
+      "key" : "output_data_type",
+      "type" : "enum<SqlType>",
+      "defaultValue" : "STRING",
+      "description" : "The output data type of LLM",
+      "optionValues" : [ "ARRAY", "MAP", "STRING", "BOOLEAN", "TINYINT", "SMALLINT", "INT", "BIGINT", "FLOAT", "DOUBLE", "DECIMAL", "NULL", "BYTES", "DATE", "TIME", "TIMESTAMP", "TIMESTAMP_TZ", "BINARY_VECTOR", "FLOAT_VECTOR", "FLOAT16_VECTOR", "BFLOAT16_VECTOR", "SPARSE_FLOAT_VECTOR", "ROW", "MULTIPLE_ROW" ]
+    }, {
+      "key" : "process_batch_size",
+      "type" : "int",
+      "defaultValue" : 100,
+      "description" : "The row batch size of each process",
+      "fallbackKeys" : [ "inference_batch_size" ]
+    }, {
+      "key" : "table_transform",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : [ ],
+      "description" : "The table transform config"
+    }, {
+      "key" : "table_match_regex",
+      "type" : "string",
+      "defaultValue" : ".*",
+      "description" : "The regex to match the table path"
+    } ]
+  }, {
+    "name" : "RegexExtract",
+    "type" : "transform",
+    "required" : [ {
+      "key" : "source_field",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Source field to extract from",
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "regex_pattern",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Regex pattern with capture groups",
+      "category" : "absolutely_required",
+      "group" : 1
+    }, {
+      "key" : "output_fields",
+      "type" : "list<string>",
+      "defaultValue" : null,
+      "description" : "Output field names for extracted groups",
+      "category" : "absolutely_required",
+      "group" : 1
+    } ],
+    "optional" : [ {
+      "key" : "default_values",
+      "type" : "list<string>",
+      "defaultValue" : null,
+      "description" : "Default values for output fields when regex pattern does not match"
+    }, {
+      "key" : "table_transform",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : [ ],
+      "description" : "The table transform config"
+    } ]
+  }, {
+    "name" : "FieldRename",
+    "type" : "transform",
+    "required" : [ ],
+    "optional" : [ {
+      "key" : "convert_case",
+      "type" : "enum<ConvertCase>",
+      "defaultValue" : null,
+      "description" : "Convert to uppercase or lowercase",
+      "optionValues" : [ "LOWER", "UPPER" ]
+    }, {
+      "key" : "prefix",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Add prefix for field name"
+    }, {
+      "key" : "suffix",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Add suffix for field name"
+    }, {
+      "key" : "replacements_with_regex",
+      "type" : "list<replacementsWithRegex>",
+      "defaultValue" : null,
+      "description" : "The regex of replace fields name to "
+    }, {
+      "key" : "specific",
+      "type" : "list<specificModify>",
+      "defaultValue" : null,
+      "description" : "The specific modify field name"
+    }, {
+      "key" : "table_transform",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : [ ],
+      "description" : "The table transform config"
+    }, {
+      "key" : "table_match_regex",
+      "type" : "string",
+      "defaultValue" : ".*",
+      "description" : "The regex to match the table path"
+    } ]
+  }, {
+    "name" : "TableRename",
+    "type" : "transform",
+    "required" : [ ],
+    "optional" : [ {
+      "key" : "convert_case",
+      "type" : "enum<ConvertCase>",
+      "defaultValue" : null,
+      "description" : "Convert to uppercase or lowercase",
+      "optionValues" : [ "LOWER", "UPPER" ]
+    }, {
+      "key" : "prefix",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Add prefix for table name"
+    }, {
+      "key" : "suffix",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Add suffix for table name"
+    }, {
+      "key" : "replacements_with_regex",
+      "type" : "list<replacementsWithRegex>",
+      "defaultValue" : null,
+      "description" : "The regex of replace table name to "
+    }, {
+      "key" : "table_transform",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : [ ],
+      "description" : "The table transform config"
+    }, {
+      "key" : "table_match_regex",
+      "type" : "string",
+      "defaultValue" : ".*",
+      "description" : "The regex to match the table path"
+    } ]
+  }, {
+    "name" : "Replace",
+    "type" : "transform",
+    "required" : [ {
+      "key" : "replace_first",
+      "type" : "boolean",
+      "defaultValue" : null,
+      "description" : "Replace the first match string",
+      "category" : "conditional",
+      "group" : 1,
+      "conditionExpression" : "'is_regex' == true",
+      "conditionTree" : {
+        "condition" : {
+          "key" : "is_regex",
+          "expectValue" : "true"
+        }
+      }
+    } ],
+    "optional" : [ {
+      "key" : "replace_field",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The field you want to replace"
+    }, {
+      "key" : "pattern",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The old string that will be replaced"
+    }, {
+      "key" : "replacement",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The new string for replace"
+    }, {
+      "key" : "is_regex",
+      "type" : "boolean",
+      "defaultValue" : false,
+      "description" : "Use regex for string match"
+    }, {
+      "key" : "table_transform",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : [ ],
+      "description" : "The table transform config"
+    }, {
+      "key" : "table_match_regex",
+      "type" : "string",
+      "defaultValue" : ".*",
+      "description" : "The regex to match the table path"
+    } ]
+  }, {
+    "name" : "RowKindExtractor",
+    "type" : "transform",
+    "required" : [ ],
+    "optional" : [ {
+      "key" : "custom_field_name",
+      "type" : "string",
+      "defaultValue" : "row_kind",
+      "description" : "Custom field name of the RowKind field"
+    }, {
+      "key" : "table_transform",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : [ ],
+      "description" : "The table transform config"
+    }, {
+      "key" : "table_match_regex",
+      "type" : "string",
+      "defaultValue" : ".*",
+      "description" : "The regex to match the table path"
+    } ]
+  }, {
+    "name" : "Split",
+    "type" : "transform",
+    "required" : [ ],
+    "optional" : [ {
+      "key" : "separator",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The separator to split the field"
+    }, {
+      "key" : "split_field",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The field to be split"
+    }, {
+      "key" : "output_fields",
+      "type" : "list<string>",
+      "defaultValue" : null,
+      "description" : "The result fields after split"
+    }, {
+      "key" : "table_transform",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : [ ],
+      "description" : "The table transform config"
+    }, {
+      "key" : "table_match_regex",
+      "type" : "string",
+      "defaultValue" : ".*",
+      "description" : "The regex to match the table path"
+    } ]
+  }, {
+    "name" : "Sql",
+    "type" : "transform",
+    "required" : [ ],
+    "optional" : [ {
+      "key" : "query",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "The query SQL"
+    }, {
+      "key" : "table_transform",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : [ ],
+      "description" : "The table transform config"
+    }, {
+      "key" : "table_match_regex",
+      "type" : "string",
+      "defaultValue" : ".*",
+      "description" : "The regex to match the table path"
+    } ]
+  }, {
+    "name" : "TableFilter",
+    "type" : "transform",
+    "required" : [ ],
+    "optional" : [ {
+      "key" : "database_pattern",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Specify database filter patternThe default value is null, which means no filtering. If you want to filter the database name, please set it to a regular expression."
+    }, {
+      "key" : "schema_pattern",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Specify schema filter patternThe default value is null, which means no filtering. If you want to filter the schema name, please set it to a regular expression."
+    }, {
+      "key" : "table_pattern",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Specify table filter patternThe default value is null, which means no filtering. If you want to filter the table name, please set it to a regular expression."
+    }, {
+      "key" : "pattern_mode",
+      "type" : "enum<PatternMode>",
+      "defaultValue" : "INCLUDE",
+      "description" : "Specify pattern modeThe default value is INCLUDE, which means include the matched table.If you want to exclude the matched table, please set it to EXCLUDE.",
+      "optionValues" : [ "INCLUDE", "EXCLUDE" ]
+    }, {
+      "key" : "table_transform",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : [ ],
+      "description" : "The table transform config"
+    }, {
+      "key" : "table_match_regex",
+      "type" : "string",
+      "defaultValue" : ".*",
+      "description" : "The regex to match the table path"
+    } ]
+  }, {
+    "name" : "TableMerge",
+    "type" : "transform",
+    "required" : [ {
+      "key" : "table",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Specify new table name",
+      "category" : "absolutely_required",
+      "group" : 1
+    } ],
+    "optional" : [ {
+      "key" : "database",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Specify new database name"
+    }, {
+      "key" : "schema",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Specify new schema name"
+    }, {
+      "key" : "table_transform",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : [ ],
+      "description" : "The table transform config"
+    }, {
+      "key" : "table_match_regex",
+      "type" : "string",
+      "defaultValue" : ".*",
+      "description" : "The regex to match the table path"
+    } ]
+  }, {
+    "name" : "DataValidator",
+    "type" : "transform",
+    "required" : [ {
+      "key" : "field_rules",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : null,
+      "description" : "Field validation rules",
+      "category" : "absolutely_required",
+      "group" : 1
+    } ],
+    "optional" : [ {
+      "key" : "table_transform",
+      "type" : "list<map<string,object>>",
+      "defaultValue" : [ ],
+      "description" : "The table transform config"
+    }, {
+      "key" : "table_match_regex",
+      "type" : "string",
+      "defaultValue" : ".*",
+      "description" : "The regex to match the table path"
+    }, {
+      "key" : "row_error_handle_way",
+      "type" : "enum<ErrorHandleWay>",
+      "defaultValue" : "FAIL",
+      "description" : "The processing method of data format error. The default value is fail, and the optional value is (fail, skip). When fail is selected, data format error will block and an exception will be thrown. When skip is selected, data format error will skip this line data.",
+      "optionValues" : [ "FAIL", "SKIP", "ROUTE_TO_TABLE" ]
+    }, {
+      "key" : "row_error_handle_way.error_table",
+      "type" : "string",
+      "defaultValue" : null,
+      "description" : "Target table name for routing invalid data when error_handle_way is ROUTE_TO_TABLE"
+    } ]
+  } ]
+}

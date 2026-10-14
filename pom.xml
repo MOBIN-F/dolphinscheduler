@@ -38,6 +38,7 @@
         <module>dolphinscheduler-registry</module>
         <module>dolphinscheduler-task-plugin</module>
         <module>dolphinscheduler-common</module>
+        <module>dolphinscheduler-ai</module>
         <module>dolphinscheduler-api</module>
         <module>dolphinscheduler-yarn-aop</module>
         <module>dolphinscheduler-dao</module>

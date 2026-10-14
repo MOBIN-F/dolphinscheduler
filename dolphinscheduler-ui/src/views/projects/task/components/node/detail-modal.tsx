@@ -51,6 +51,7 @@ import type {
 } from './types'
 import { queryProjectPreferenceByProjectCode } from '@/service/modules/projects-preference'
 import { INodeData } from './types'
+import { useAiStatus } from '@/components/ai-assistant/use-ai-status'
 
 const props = {
   show: {
@@ -94,6 +95,7 @@ const NodeDetailModal = defineComponent({
   props,
   emits: ['cancel', 'submit', 'viewLog'],
   setup(props, { emit }) {
+    const aiStatus = useAiStatus()
     const { t, locale } = useI18n()
     const router: Router = useRouter()
     const taskStore = useTaskNodeStore()
@@ -255,7 +257,13 @@ const NodeDetailModal = defineComponent({
         confirmDisabled={props.readonly}
         onCancel={onCancel}
         headerLinks={headerLinks}
-        width={props.data.taskType === 'SEATUNNEL' ? '85%' : undefined}
+        width={
+          props.data.taskType === 'SEATUNNEL'
+            ? aiStatus.value?.enabled && !props.readonly
+              ? '95%'
+              : '85%'
+            : undefined
+        }
       >
         <Detail
           ref={detailRef}

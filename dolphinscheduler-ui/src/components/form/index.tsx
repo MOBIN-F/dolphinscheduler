@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { defineComponent, PropType, toRefs, h, unref } from 'vue'
+import { defineComponent, PropType, toRefs, h, unref, VNode } from 'vue'
 import { NSpin, NGrid, NForm, NFormItemGi, FormRules } from 'naive-ui'
 import { useForm } from './use-form'
 import styles from './index.module.scss'
@@ -38,6 +38,14 @@ const props = {
   splitPaths: {
     type: Array as PropType<string[]>,
     default: () => []
+  },
+  // Three columns: the other elements | middle | the split elements
+  middle: {
+    type: Function as PropType<() => VNode | null>
+  },
+  // Rendered instead of the split elements when it returns a node, the split elements stay mounted
+  splitOverlay: {
+    type: Function as PropType<() => VNode | null>
   }
 }
 
@@ -56,8 +64,17 @@ const Form = defineComponent({
     layout?: GridProps
     loading?: boolean
     splitPaths?: string[]
+    middle?: () => VNode | null
+    splitOverlay?: () => VNode | null
   }) {
-    const { loading, layout, meta, splitPaths = [] } = props
+    const {
+      loading,
+      layout,
+      meta,
+      splitPaths = [],
+      middle,
+      splitOverlay
+    } = props
     const { elements = [], ...restFormProps } = meta
 
     const renderGrid = (items: IFormItem[]) => (
@@ -82,20 +99,27 @@ const Form = defineComponent({
     const leftElements = elements.filter((element) =>
       splitPaths.includes(element.path)
     )
+    const otherElements = elements.filter(
+      (element) => !splitPaths.includes(element.path)
+    )
+    const overlay = splitOverlay ? splitOverlay() : null
 
     return (
       <NSpin show={loading}>
         <NForm {...restFormProps} rules={meta.rules as FormRules} ref='formRef'>
-          {leftElements.length ? (
+          {leftElements.length && middle ? (
+            <div class={[styles.split, styles.three]}>
+              <div class={styles.settings}>{renderGrid(otherElements)}</div>
+              <div class={styles.middle}>{middle()}</div>
+              <div class={styles.editor}>
+                {overlay}
+                <div v-show={!overlay}>{renderGrid(leftElements)}</div>
+              </div>
+            </div>
+          ) : leftElements.length ? (
             <div class={styles.split}>
               <div class={styles.left}>{renderGrid(leftElements)}</div>
-              <div class={styles.right}>
-                {renderGrid(
-                  elements.filter(
-                    (element) => !splitPaths.includes(element.path)
-                  )
-                )}
-              </div>
+              <div class={styles.right}>{renderGrid(otherElements)}</div>
             </div>
           ) : (
             renderGrid(elements)

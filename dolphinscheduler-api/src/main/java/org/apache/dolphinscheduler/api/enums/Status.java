@@ -589,6 +589,12 @@ public enum Status {
     CREATE_WORKFLOW_LINEAGE_ERROR(1403001, "create workflow lineage error", "创建工作流血缘错误"),
     UPDATE_WORKFLOW_LINEAGE_ERROR(1403002, "update workflow lineage error", "更新工作流血缘错误"),
     DELETE_WORKFLOW_LINEAGE_ERROR(1403003, "delete workflow lineage error", "删除工作流血缘错误"),
+
+    AI_ASSISTANT_NOT_ENABLED(1404001, "AI assistant is not enabled", "AI 助手未启用"),
+    AI_ASSISTANT_RATE_LIMITED(1404002, "Too many AI assistant requests, please try again later",
+            "AI 助手请求过于频繁，请稍后再试"),
+    AI_ASSISTANT_BUSY(1404003, "AI assistant is busy, please try again later", "AI 助手繁忙，请稍后再试"),
+    AI_ASSISTANT_INPUT_EMPTY(1404004, "The message to the AI assistant is empty", "发送给 AI 助手的消息为空"),
     ;
 
     @Getter

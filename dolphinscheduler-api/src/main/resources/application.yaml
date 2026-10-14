@@ -176,6 +176,34 @@ api:
     # (0 = infinite), and socket server would never close even though no requests accept
     read-timeout: 0
 
+# AI assistant, e.g. generating SeaTunnel configs in the SeaTunnel task node
+ai:
+  enabled: false
+  # Max requests per user per minute, 0 means no limit
+  rate-limit-per-user-per-minute: 10
+  llm:
+    # AWS Bedrock. Credentials: access-key-id / secret-access-key below, or the AWS default credentials chain
+    # (instance role, environment variables such as AWS_BEARER_TOKEN_BEDROCK for a Bedrock API key, profile)
+    region: us-east-1
+    # Model or inference profile id
+    model: us.anthropic.claude-sonnet-5-5
+    # Cheaper model for auxiliary work, e.g. summarizing long conversations
+    fast-model: us.anthropic.claude-haiku-5-5
+    access-key-id: ""
+    secret-access-key: ""
+    timeout: 120s
+    max-tokens: 8192
+  seatunnel:
+    # Must match the connector metadata, the built-in metadata is for 2.3.13
+    version: 2.3.13
+    # SeaTunnel installation on this machine, enables the engine level validation of the generated configs
+    home: ""
+    # Connector metadata exported by dolphinscheduler-ai/tools/seatunnel-metadata-exporter, empty for the built-in one
+    metadata-path: ""
+    check-timeout: 60s
+    # Max rounds of automatic fixing when the generated config fails the validation
+    max-fix-attempts: 3
+
 security:
   authentication:
     # Authentication types (supported types: PASSWORD, LDAP, CASDOOR_SSO, OIDC)
