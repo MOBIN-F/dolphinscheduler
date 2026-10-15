@@ -142,6 +142,29 @@
   font-size: 12px;
 }
 
+.http-responses {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.http-response-body {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.04);
+  font-family: Menlo, Consolas, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.http-response-note {
+  margin-top: 4px;
+  color: #8c8c8c;
+}
+
 .error {
   margin-top: 4px;
   color: #d03050;

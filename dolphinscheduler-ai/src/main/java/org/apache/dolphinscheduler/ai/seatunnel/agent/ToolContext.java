@@ -20,6 +20,7 @@ package org.apache.dolphinscheduler.ai.seatunnel.agent;
 import org.apache.dolphinscheduler.ai.security.CredentialRedactor;
 
 import java.util.Set;
+import java.util.function.Consumer;
 
 /**
  * State of the tools within one chat request.
@@ -28,6 +29,7 @@ public class ToolContext {
 
     private final CredentialRedactor redactor;
     private final Set<String> allowedHosts;
+    private final Consumer<HttpResponseSample> responseListener;
     private int httpCalls;
 
     /**
@@ -36,8 +38,18 @@ public class ToolContext {
      *                     HTTP tool may call
      */
     public ToolContext(CredentialRedactor redactor, Set<String> allowedHosts) {
+        this(redactor, allowedHosts, sample -> {
+        });
+    }
+
+    /**
+     * @param responseListener receives the raw responses of the HTTP calls, which are shown to the user only
+     */
+    public ToolContext(CredentialRedactor redactor, Set<String> allowedHosts,
+                       Consumer<HttpResponseSample> responseListener) {
         this.redactor = redactor;
         this.allowedHosts = allowedHosts;
+        this.responseListener = responseListener;
     }
 
     public CredentialRedactor redactor() {
@@ -46,6 +58,10 @@ public class ToolContext {
 
     public Set<String> allowedHosts() {
         return allowedHosts;
+    }
+
+    void onHttpResponse(HttpResponseSample sample) {
+        responseListener.accept(sample);
     }
 
     /**

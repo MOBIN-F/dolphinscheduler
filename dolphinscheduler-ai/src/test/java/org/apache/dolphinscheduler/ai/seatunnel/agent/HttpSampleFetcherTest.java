@@ -132,6 +132,37 @@ public class HttpSampleFetcherTest {
     }
 
     @Test
+    public void testRawResponseOnlyForTheUser() {
+        List<HttpResponseSample> samples = new java.util.ArrayList<>();
+        ToolContext context = new ToolContext(new CredentialRedactor(),
+                HttpSampleFetcher.allowedHosts(base + "/orders"), samples::add);
+        ObjectNode arguments = (ObjectNode) arguments("/orders");
+        arguments.putObject("params").put("page", "1");
+        String result = fetcher().fetch(arguments, context);
+        Assertions.assertEquals(1, samples.size());
+        HttpResponseSample sample = samples.get(0);
+        Assertions.assertEquals("GET " + base + "/orders", sample.target());
+        Assertions.assertEquals(200, sample.status());
+        Assertions.assertEquals(ORDERS, sample.body());
+        Assertions.assertFalse(sample.truncated());
+        // The LLM only gets the fields, not the raw response
+        Assertions.assertFalse(result.contains("t0ps3cret"), result);
+        Assertions.assertFalse(result.contains("\"msg\":\"ok\""), result);
+        Assertions.assertTrue(result.contains("do not reconstruct"), result);
+
+        samples.clear();
+        new HttpSampleFetcher(Duration.ofSeconds(1), 100, 3, List.of(), true).fetch(arguments("/big"), context);
+        Assertions.assertTrue(samples.get(0).truncated());
+        Assertions.assertEquals(100, samples.get(0).body().length());
+    }
+
+    @Test
+    public void testMinuteTimestamp() throws Exception {
+        String result = JsonFieldInferrer.describe(mapper.readTree("{\"time\":\"2026-10-15T07:30\"}"));
+        Assertions.assertTrue(result.contains("looks like timestamp yyyy-MM-dd'T'HH:mm,"), result);
+    }
+
+    @Test
     public void testCredentialRestoredButNotReturned() {
         CredentialRedactor redactor = new CredentialRedactor();
         String redacted = redactor.redactText("token is Abc.Secret-1");

@@ -21,6 +21,7 @@ import static org.apache.dolphinscheduler.api.constants.ApiFuncIdentificationCon
 
 import org.apache.dolphinscheduler.ai.config.AiProperties;
 import org.apache.dolphinscheduler.ai.seatunnel.agent.AgentEventListener;
+import org.apache.dolphinscheduler.ai.seatunnel.agent.HttpResponseSample;
 import org.apache.dolphinscheduler.ai.seatunnel.agent.SeatunnelChatRequest;
 import org.apache.dolphinscheduler.ai.seatunnel.agent.SeatunnelConfigAgent;
 import org.apache.dolphinscheduler.ai.seatunnel.agent.SeatunnelProposal;
@@ -361,6 +362,18 @@ public class AiAssistantServiceImpl implements AiAssistantService {
             }
             data.put("validations", validations);
             send("proposal", data);
+        }
+
+        @Override
+        public void onHttpResponse(HttpResponseSample sample) {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("target", sample.target());
+            data.put("status", sample.status());
+            data.put("contentType", sample.contentType());
+            data.put("size", sample.size());
+            data.put("truncated", sample.truncated());
+            data.put("body", sample.body());
+            send("http_response", data);
         }
 
         @Override

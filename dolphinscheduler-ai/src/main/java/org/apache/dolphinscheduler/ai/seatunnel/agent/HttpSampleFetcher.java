@@ -71,9 +71,14 @@ public class HttpSampleFetcher {
     private static final int MAX_TEXT_LINES = 3;
     private static final int MAX_LINE_LENGTH = 200;
     private static final int MAX_ERROR_BODY = 500;
+    /**
+     * Max length of the raw response shown to the user.
+     */
+    static final int MAX_RAW_CHARS = 20_000;
 
     private static final String WORKER_NOTE = "\nNote: the request was sent from the DolphinScheduler api-server. "
-            + "The SeaTunnel job runs on a worker, which must be able to reach the address as well.";
+            + "The SeaTunnel job runs on a worker, which must be able to reach the address as well.\n"
+            + "The raw response is shown to the user in the chat, do not reconstruct or repeat it.";
 
     private final HttpClient client;
     private final Duration timeout;
@@ -252,7 +257,13 @@ public class HttpSampleFetcher {
                 }
                 continue;
             }
-            return describeResponse(status, response.headers().firstValue("Content-Type").orElse(""), bytes);
+            String contentType = response.headers().firstValue("Content-Type").orElse("");
+            boolean truncated = bytes.length > maxResponseBytes;
+            String responseBody = new String(bytes, 0, Math.min(bytes.length, maxResponseBytes), charset(contentType));
+            context.onHttpResponse(new HttpResponseSample(target(currentMethod, current), status, contentType,
+                    Math.min(bytes.length, maxResponseBytes), truncated || responseBody.length() > MAX_RAW_CHARS,
+                    responseBody.length() > MAX_RAW_CHARS ? responseBody.substring(0, MAX_RAW_CHARS) : responseBody));
+            return describeResponse(status, contentType, responseBody, truncated);
         }
         return "Not called: more than " + MAX_REDIRECTS + " redirects.";
     }
@@ -290,12 +301,12 @@ public class HttpSampleFetcher {
         return null;
     }
 
-    private String describeResponse(int status, String contentType, byte[] bytes) {
-        boolean truncated = bytes.length > maxResponseBytes;
-        String body = new String(bytes, 0, Math.min(bytes.length, maxResponseBytes), charset(contentType));
+    private String describeResponse(int status, String contentType, String body, boolean truncated) {
         StringBuilder text = new StringBuilder("HTTP ").append(status)
                 .append(", content-type: ").append(contentType.isEmpty() ? "(none)" : contentType)
-                .append(", ").append(truncated ? "more than " + maxResponseBytes : bytes.length).append(" bytes")
+                .append(", ").append(truncated ? "more than " + maxResponseBytes
+                        : body.getBytes(charset(contentType)).length)
+                .append(" bytes")
                 .append(truncated ? " (truncated)" : "").append("\n");
         if (status < 200 || status >= 300) {
             text.append("The API returned an error. Response (first ").append(MAX_ERROR_BODY).append(" chars): ")
@@ -324,6 +335,14 @@ public class HttpSampleFetcher {
                     .map(line -> mask(truncate(line, MAX_LINE_LENGTH))).collect(Collectors.joining("\n")));
         }
         return text.append(WORKER_NOTE).toString();
+    }
+
+    /**
+     * @return the method and the URL without the user info, the query and the fragment
+     */
+    private static String target(String method, URI uri) {
+        return method + " " + uri.getScheme() + "://" + uri.getRawAuthority().substring(
+                uri.getRawAuthority().lastIndexOf('@') + 1) + (uri.getRawPath() == null ? "" : uri.getRawPath());
     }
 
     private static String method(JsonNode arguments) {

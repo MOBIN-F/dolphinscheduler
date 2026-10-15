@@ -18,7 +18,12 @@
 import { computed, reactive } from 'vue'
 import { postSse } from './sse'
 import type { SavedMessage } from '@/service/modules/ai/types'
-import type { ChatMessage, HistoryTurn, Proposal } from './types'
+import type {
+  ChatMessage,
+  HistoryTurn,
+  HttpResponseSample,
+  Proposal
+} from './types'
 
 export interface AiSessionOptions {
   /**
@@ -208,6 +213,11 @@ export function useAiSession(options: AiSessionOptions) {
           } else if (event === 'done') {
             // The final reply without the config, the config is shown in the diff editor
             reply.content = mask(data.message) || reply.content
+          } else if (event === 'http_response') {
+            reply.httpResponses = [
+              ...(reply.httpResponses || []),
+              data as HttpResponseSample
+            ]
           } else if (event === 'error') {
             reply.error = data.message
           }

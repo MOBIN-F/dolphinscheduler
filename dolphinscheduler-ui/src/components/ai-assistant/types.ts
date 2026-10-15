@@ -40,6 +40,18 @@ interface Proposal {
 }
 
 /**
+ * Raw response of an HTTP API call of the assistant, shown to the user only and not saved
+ */
+interface HttpResponseSample {
+  target: string
+  status: number
+  contentType: string
+  size: number
+  truncated: boolean
+  body: string
+}
+
+/**
  * State of the proposal of an assistant message
  */
 type ProposalState =
@@ -57,6 +69,7 @@ interface ChatMessage {
    * Progress shown under a streaming assistant message, e.g. a tool call
    */
   statuses: { status: string; detail: string | null }[]
+  httpResponses?: HttpResponseSample[]
   streaming: boolean
   /**
    * Excluded from the history after the user reverted the turn
@@ -95,6 +108,7 @@ export {
   ValidationIssue,
   ValidationResult,
   Proposal,
+  HttpResponseSample,
   ProposalState,
   ChatMessage,
   HistoryTurn

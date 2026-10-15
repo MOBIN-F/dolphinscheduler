@@ -42,6 +42,12 @@ public interface AgentEventListener {
     void onProposal(SeatunnelProposal proposal);
 
     /**
+     * The raw response of an HTTP API call, shown to the user only.
+     */
+    default void onHttpResponse(HttpResponseSample sample) {
+    }
+
+    /**
      * The request is finished.
      *
      * @param assistantMessage the reply without the config, the browser keeps it in the history

@@ -136,7 +136,7 @@ public class SeatunnelConfigAgent {
         messages.add(SystemMessage.from(buildSystemPrompt(request, redactor)));
         messages.addAll(buildHistory(request, redactor));
         messages.add(UserMessage.from(buildUserMessage(request, redactor)));
-        ToolContext toolContext = new ToolContext(redactor, allowedHosts(request));
+        ToolContext toolContext = new ToolContext(redactor, allowedHosts(request), listener::onHttpResponse);
 
         listener.onStatus(AgentEventListener.STATUS_THINKING, null);
         String reply = runWithTools(messages, toolContext, listener, true, cancelled);

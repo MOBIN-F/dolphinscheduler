@@ -18,6 +18,8 @@
 import { defineComponent, nextTick, PropType, ref, watch } from 'vue'
 import {
   NButton,
+  NCollapse,
+  NCollapseItem,
   NDivider,
   NIcon,
   NInput,
@@ -31,7 +33,7 @@ import { useI18n } from 'vue-i18n'
 import { renderMarkdown } from './markdown'
 import styles from './index.module.scss'
 import type { AiSession } from './use-ai-session'
-import type { ChatMessage } from './types'
+import type { ChatMessage, HttpResponseSample } from './types'
 
 const props = {
   session: {
@@ -140,6 +142,46 @@ export default defineComponent({
       return t('project.node.ai_status_' + status)
     }
 
+    const formatSize = (size: number) =>
+      size >= 1024 ? (size / 1024).toFixed(1) + ' KB' : size + ' B'
+
+    const formatBody = (sample: HttpResponseSample) => {
+      if (!sample.truncated) {
+        try {
+          return JSON.stringify(JSON.parse(sample.body), null, 2)
+        } catch (e) {
+          // Not JSON, shown as it is
+        }
+      }
+      return sample.body
+    }
+
+    const renderHttpResponses = (message: ChatMessage) =>
+      message.httpResponses?.length ? (
+        <NCollapse class={styles['http-responses']}>
+          {message.httpResponses.map((sample, index) => (
+            <NCollapseItem
+              key={index}
+              name={index}
+              title={t('project.node.ai_http_response', {
+                target: sample.target,
+                status: sample.status,
+                size: formatSize(sample.size)
+              })}
+            >
+              <pre class={styles['http-response-body']}>
+                {formatBody(sample)}
+              </pre>
+              <div class={styles['http-response-note']}>
+                {(sample.truncated
+                  ? t('project.node.ai_http_response_truncated') + ' '
+                  : '') + t('project.node.ai_http_response_note')}
+              </div>
+            </NCollapseItem>
+          ))}
+        </NCollapse>
+      ) : null
+
     const renderProposalState = (message: ChatMessage) => {
       const session = props.session
       switch (message.proposalState) {
@@ -247,6 +289,7 @@ export default defineComponent({
                 ))}
               </div>
             )}
+            {renderHttpResponses(message)}
             {message.error && (
               <div class={styles.error}>
                 {message.error === 'stopped'

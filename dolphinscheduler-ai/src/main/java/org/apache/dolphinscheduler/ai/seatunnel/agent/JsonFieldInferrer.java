@@ -51,9 +51,9 @@ class JsonFieldInferrer {
     private static final Pattern DATE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
     private static final Pattern DATE_SLASH = Pattern.compile("\\d{4}/\\d{2}/\\d{2}( \\d{2}:\\d{2}:\\d{2})?");
     private static final Pattern TIMESTAMP =
-            Pattern.compile("\\d{4}-\\d{2}-\\d{2}([ T])\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?");
+            Pattern.compile("\\d{4}-\\d{2}-\\d{2}([ T])\\d{2}:\\d{2}(:\\d{2})?(\\.\\d{1,9})?");
     private static final Pattern TIMESTAMP_ZONE =
-            Pattern.compile("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,9})?(Z|[+-]\\d{2}:?\\d{2})");
+            Pattern.compile("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?(\\.\\d{1,9})?(Z|[+-]\\d{2}:?\\d{2})");
     private static final Pattern INTEGER_STRING = Pattern.compile("-?\\d+");
 
     private final Map<String, Field> fields = new LinkedHashMap<>();
@@ -260,8 +260,8 @@ class JsonFieldInferrer {
         }
         Matcher timestamp = TIMESTAMP.matcher(value);
         if (timestamp.matches()) {
-            return "looks like timestamp yyyy-MM-dd" + ("T".equals(timestamp.group(1)) ? "'T'" : " ") + "HH:mm:ss"
-                    + (timestamp.group(2) == null ? "" : ".SSS");
+            return "looks like timestamp yyyy-MM-dd" + ("T".equals(timestamp.group(1)) ? "'T'" : " ") + "HH:mm"
+                    + (timestamp.group(2) == null ? "" : ":ss") + (timestamp.group(3) == null ? "" : ".SSS");
         }
         if (DATE.matcher(value).matches()) {
             return "looks like date yyyy-MM-dd";
