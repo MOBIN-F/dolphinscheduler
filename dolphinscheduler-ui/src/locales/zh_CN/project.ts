@@ -647,6 +647,7 @@ export default {
     ai_status_validating_local: '本地校验',
     ai_status_validating_engine: 'SeaTunnel 引擎校验',
     ai_status_fixing: '根据校验结果自动修复（第 {n} 轮）',
+    ai_status_http_sample: '调用接口获取字段 {target}',
     ai_proposal: 'AI 建议的修改',
     ai_proposal_pending: '请在右侧确认修改',
     ai_pending_hint: '请先在右侧接受或拒绝当前修改',

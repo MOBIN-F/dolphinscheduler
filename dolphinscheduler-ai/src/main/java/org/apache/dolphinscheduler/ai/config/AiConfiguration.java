@@ -19,6 +19,7 @@ package org.apache.dolphinscheduler.ai.config;
 
 import org.apache.dolphinscheduler.ai.llm.BedrockChatModels;
 import org.apache.dolphinscheduler.ai.llm.TokenUsageLogger;
+import org.apache.dolphinscheduler.ai.seatunnel.agent.HttpSampleFetcher;
 import org.apache.dolphinscheduler.ai.seatunnel.agent.SeatunnelConfigAgent;
 import org.apache.dolphinscheduler.ai.seatunnel.metadata.ConnectorMetadataRepository;
 import org.apache.dolphinscheduler.ai.seatunnel.validation.HoconValidator;
@@ -65,6 +66,7 @@ public class AiConfiguration {
                                                      SeatunnelEngineChecker engineChecker) {
         return new SeatunnelConfigAgent(models.mainModel(), models.fastModel(), models.maxTokens(),
                 properties.getLlm().getTimeout(), metadataRepository, new HoconValidator(metadataRepository),
-                engineChecker, properties.getSeatunnel().getMaxFixAttempts());
+                engineChecker, properties.getSeatunnel().getMaxFixAttempts(),
+                properties.getHttpSample().isEnabled() ? new HttpSampleFetcher(properties.getHttpSample()) : null);
     }
 }

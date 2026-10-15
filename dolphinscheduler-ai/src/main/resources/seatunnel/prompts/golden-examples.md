@@ -126,3 +126,48 @@ sink {
   }
 }
 ```
+
+### HTTP API (records in a nested array) to MySQL (BATCH)
+```hocon
+env {
+  parallelism = 1
+  job.mode = "BATCH"
+}
+
+source {
+  Http {
+    url = "https://api.example.com/v1/orders"
+    method = "GET"
+    format = "json"
+    content_field = "$.data.list.*"
+    headers {
+      Authorization = "Bearer ${api_token}"
+    }
+    params {
+      date = "${system.biz.date}"
+    }
+    plugin_output = "orders"
+    schema {
+      fields {
+        id = "bigint"
+        amount = "double"
+        status = "string"
+        created_at = "timestamp"
+      }
+    }
+  }
+}
+
+sink {
+  Jdbc {
+    plugin_input = "orders"
+    url = "jdbc:mysql://mysql-host:3306/dw"
+    driver = "com.mysql.cj.jdbc.Driver"
+    username = "${mysql_user}"
+    password = "${mysql_password}"
+    generate_sink_sql = true
+    database = "dw"
+    table = "orders"
+  }
+}
+```

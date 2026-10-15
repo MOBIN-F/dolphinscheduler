@@ -28,6 +28,7 @@
 | 三栏布局 | 左：节点配置；中：AI 对话；右：脚本编辑器 / 修改对比。未启用 AI 时保持原来的两栏布局 |
 | 生成与多轮修改 | 第一次描述需求生成完整配置，之后可以继续说"改成流式""并行度改成 4"等，AI 在当前脚本基础上修改 |
 | 基于真实参数生成 | AI 写配置前会查询所用 connector 的参数（来自 SeaTunnel 2.3.13 导出的元数据），不靠模型记忆，减少编造参数 |
+| 调用接口获取字段 | 配置 Http source 时，AI 会用你给出的接口地址实际调用一次，根据返回的 JSON / text 推断字段和类型，生成 `schema` 和 `content_field`，不靠猜（见 2.1） |
 | 两层校验 + 自动修复 | 本地校验（语法、必填参数、条件参数、未知参数、连线等）+ 引擎校验（调用服务器上安装的 SeaTunnel 的校验 API）；不通过时 AI 带着错误自动修复，最多 3 轮 |
 | 对比确认 | 右侧显示"原脚本 vs 建议脚本"的 diff 和校验结果；可直接在建议一侧修改后再接受；支持合并 / 并排视图 |
 | 回撤 / 重做 | 每次接受都是一个检查点，可以"回撤到此前"恢复，也可以"重做" |
@@ -64,6 +65,21 @@
 - 你在对话里给出的密码会写进最终脚本，但不会发送给 AI，对话里显示为 `******`。
 - 你没给的密码，AI 会写成 `${mysql_password}` 这样的参数，并提示你在任务的"自定义参数"里定义（或直接在编辑器里填写）。
 
+### 2.1 Http 接口字段推断
+
+在需求里写出**完整的接口地址**，需要认证时一并给出，例如：
+
+> 把 https://api.example.com/v1/orders 的数据同步到 MySQL 的 dw.orders，请求头 Authorization 用 Bearer token，token 是 xxx
+
+AI 会先调用该接口（进度里显示“调用接口获取字段 GET https://api.example.com/v1/orders”），再根据返回结果写 `schema.fields`、`content_field`（记录在嵌套数组里时）或 `json_field`。
+
+- **只调用你给出的地址**：只有在对话或当前脚本里出现过的 `host:端口` 才会被调用，AI 自己编造的地址、接口返回里出现的地址都不会调用。重定向只允许同一主机（如 http 跳到 https）。
+- **禁止的地址**：本机回环地址（127.0.0.1、localhost）、链路本地地址（包括 `169.254.169.254` 云元数据服务）、组播地址，以及 `ai.http-sample.denied-hosts` 中配置的地址。内网私有地址允许调用。
+- **发给 AI 的内容**：只有字段路径、类型、是否可为空、每个字段一个示例值（最长 50 字符；password、token、secret、key 等字段的值显示为 `******`），不发原始响应。
+- **凭据**：token 和密码一样会先替换成占位符，只在真正发请求时还原，AI 看不到真实值。参数里有未定义的 `${xxx}` 时不会发请求，AI 会请你给出具体值。
+- **限制**：仅支持 GET / POST；超时 10 秒；响应只读取前 1MB；每次对话请求最多调用 3 次。
+- **注意**：接口是从 **api-server** 调用的，作业实际在 **worker** 上运行，worker 也必须能访问该地址。
+
 关于聊天记录：
 - 重新打开节点时，顶部显示"以下为历史对话 · 最后更新 时间 by 用户"，下面是"本次对话"。用户消息显示发送人和时间。
 - 历史消息只显示当时的结果（已接受 / 已拒绝 / 已回撤 / 已过期），不能回撤或重做。关闭弹窗时还没确认的修改会显示"已过期（未确认）"。
@@ -83,41 +99,57 @@
 
 ### 3.2 部署步骤（只改 api-server，master / worker / alert 不用动）
 
-部署物（脚本和 SQL 也在仓库 `dolphinscheduler-ai/tools/deploy/` 下）：
+部署包 `ds-ai-full-deploy-3.4.2.tar.gz`（包含全部 AI 功能：配置生成、聊天记录、Http 接口字段推断；脚本和 SQL 也在仓库 `dolphinscheduler-ai/tools/deploy/` 下）：
 
-| 包 | 内容 |
+| 内容 | 说明 |
 |---|---|
-| `ds-ai-deploy-3.4.2.tar.gz` | AI 助手主体：38 个 jar（新增 23 个 + 升级 14 个 AWS SDK + api jar）、要删除的旧 jar 清单、ui、`install-api-server.sh`、`application-ai.yaml`、元数据导出工具 |
-| `ds-ai-conversation-deploy-3.4.2.tar.gz` | 聊天记录功能：api jar、dao jar、ui、建表 SQL、`install-conversation-update.sh` |
+| `api-server-libs/`（39 个 jar） | 新增 22 个第三方 jar（LangChain4j、Bedrock SDK、AWS CRT 等）+ 升级 14 个 AWS SDK jar（2.17.282 → 2.42.4）+ `dolphinscheduler-ai / api / dao-3.4.2.jar` |
+| `remove-from-api-server-libs.txt` | 要删除的 14 个旧版 AWS SDK jar |
+| `ui/` | 新前端 |
+| `ai_conversation_mysql.sql` / `ai_conversation_postgresql.sql` | 聊天记录表 `t_ds_ai_conversation` |
+| `install-api-server.sh` | 安装脚本：备份 libs 和 ui → 删除旧 jar → 拷入新 jar → 替换 ui |
+| `application-ai.yaml` | 配置片段 |
+| `seatunnel-metadata-exporter/` | connector 元数据导出工具（见“五”） |
 
-**首次部署（两个包都要装，按顺序）：**
+**部署步骤：**
 
 ```bash
-# 1. 建表（二选一）
-mysql ... < ds-ai-conversation-deploy/ai_conversation_mysql.sql
-psql  ... -f ds-ai-conversation-deploy/ai_conversation_postgresql.sql
+# 1. 建表（二选一，表已存在时会跳过）
+mysql -h <host> -u <user> -p <database> < ds-ai-full-deploy/ai_conversation_mysql.sql
+psql -h <host> -U <user> -d <database> -f ds-ai-full-deploy/ai_conversation_postgresql.sql
 
-# 2. 安装 AI 助手主体：备份 libs 和 ui → 删除 14 个 2.17.282 版本的 AWS SDK jar → 拷入新 jar → 替换 ui
-tar -xzf ds-ai-deploy-3.4.2.tar.gz && cd ds-ai-deploy
+# 2. 停止 api-server
+/opt/dolphinscheduler-3.4.2/bin/dolphinscheduler-daemon.sh stop api-server
+
+# 3. 安装 jar 和 ui
+tar -xzf ds-ai-full-deploy-3.4.2.tar.gz && cd ds-ai-full-deploy
 ./install-api-server.sh /opt/dolphinscheduler-3.4.2
-cd ..
-
-# 3. 安装聊天记录功能：覆盖 api / dao jar 和 ui（会检查第 2 步已完成）
-tar -xzf ds-ai-conversation-deploy-3.4.2.tar.gz && cd ds-ai-conversation-deploy
-./install-conversation-update.sh /opt/dolphinscheduler-3.4.2
 
 # 4. 配置：把 application-ai.yaml 的内容追加到 api-server/conf/application.yaml 顶层（与 security: 同级），
 #    修改 ai.seatunnel.home 为实际的 SeaTunnel 安装目录
 
-# 5. 重启 api-server
+# 5. 给 api-server 所在 EC2 的实例角色加 Bedrock 权限（见 3.4）
+
+# 6. 启动 api-server
+/opt/dolphinscheduler-3.4.2/bin/dolphinscheduler-daemon.sh start api-server
+```
+
+**已部署过 AI 助手主体（未含聊天记录和 Http 接口字段推断）时的升级：** 使用 `ds-ai-update-deploy-3.4.2.tar.gz`（只含 ai / api / dao 三个 jar、ui、建表 SQL 和 `install-ai-update.sh`，第三方 jar 不变）：
+
+```bash
+tar -xzf ds-ai-update-deploy-3.4.2.tar.gz && cd ds-ai-update-deploy
+mysql -h <host> -u <user> -p <database> < ai_conversation_mysql.sql   # 或 psql ... -f ai_conversation_postgresql.sql
+/opt/dolphinscheduler-3.4.2/bin/dolphinscheduler-daemon.sh stop api-server
+./install-ai-update.sh /opt/dolphinscheduler-3.4.2                    # 备份到 api-server/backup-<时间>
+/opt/dolphinscheduler-3.4.2/bin/dolphinscheduler-daemon.sh start api-server
 ```
 
 注意：
 - **旧版 AWS SDK jar 必须删除**（脚本已处理）。jar 文件名带版本号，同一个包的 2.17.282 和 2.42.4 同时在 classpath 上会冲突。`datasync-2.17.282.jar` 和 `netty-nio-client-2.17.282.jar` 是正常保留的。
 - 前端读取的是 **`api-server/ui`**，不是 DolphinScheduler 根目录下的 `ui`。
-- 替换后用新开的无痕窗口验证，避免浏览器缓存旧前端（入口文件应为 `assets/index.4a07f493.js`）。
+- 替换后用新开的无痕窗口验证，避免浏览器缓存旧前端（入口文件应为 `assets/index.209cb49d.js`）。
 
-**回滚：** 停止 api-server，用脚本输出的备份目录（`api-server/libs.bak-*`、`api-server/ui.bak-*`、`api-server/backup-*`）恢复，再启动；或把 `ai.enabled` 改为 `false` 后重启（页面恢复原样，AI 相关组件都不会创建）。
+**回滚：** 停止 api-server，用脚本输出的备份目录（`api-server/libs.bak-*`、`api-server/ui.bak-*`）恢复，再启动；或把 `ai.enabled` 改为 `false` 后重启（页面恢复原样，AI 相关组件都不会创建）。
 
 ### 3.3 配置项（`api-server/conf/application.yaml`）
 
@@ -139,6 +171,12 @@ ai:
     metadata-path: ""                # 自定义 connector 元数据文件，留空用内置的
     check-timeout: 60s
     max-fix-attempts: 3              # 校验不通过时自动修复的最大轮数
+  http-sample:                       # 调用 Http 接口获取字段（见 2.1），以下均为默认值，可不配置
+    enabled: true
+    timeout: 10s
+    max-response-bytes: 1048576      # 只读取响应的前 1MB
+    max-calls-per-request: 3         # 每次对话请求最多调用接口的次数
+    denied-hosts: []                 # 额外禁止调用的地址：域名（含子域名）、IP 或 CIDR，例如 [10.0.1.0/24, internal.corp]
 ```
 
 ### 3.4 AWS 权限
@@ -187,7 +225,7 @@ aws bedrock-runtime converse-stream --region us-east-1 \
 浏览器                               api-server                       dolphinscheduler-ai（Java 17）
 三栏界面 ── POST /ai/seatunnel/chat ──▶ 权限 / 限流 / 线程池 ──────▶ SeatunnelConfigAgent
          ◀── SSE: status/delta/          SseEmitter                    ├ LangChain4j + Bedrock（流式、工具调用）
-             proposal/done/error                                       ├ 工具：list_connectors / get_connector_info / validate_config
+             proposal/done/error                                       ├ 工具：list_connectors / get_connector_info / validate_config / fetch_http_sample
 聊天记录 ── GET/PUT/DELETE /ai/conversations ─▶ t_ds_ai_conversation   ├ HoconValidator（本地校验）
                                                                        ├ SeatunnelEngineChecker（独立 JVM 调 SeaTunnel 校验 API）
                                                                        ├ ConnectorMetadataRepository（2.3.13 元数据）
@@ -233,6 +271,8 @@ dolphinscheduler-ai/tools/seatunnel-metadata-exporter/export.sh /opt/seatunnel-2
 | 校验结果显示"引擎校验：未执行" | 未配置 `ai.seatunnel.home`、路径下没有 `starter/seatunnel-starter.jar`，或 api-server 运行在 JRE 上；鼠标悬停可看原因 |
 | AI 说某个 connector 未安装 | 该 connector 不在元数据里，按"五"重新导出 |
 | 页面没有三栏 | `ai.enabled` 未开启；或是工作流实例的只读查看；或浏览器缓存了旧前端（用无痕窗口验证） |
+| AI 说接口地址“不是用户给出的” | 对话里没有写出完整的 `http(s)://host:端口`，或 AI 拼出的地址和你写的不一致；请在对话中给出完整 URL |
+| 调用接口报 `unknown host` / 超时 | api-server 无法访问该地址；接口地址需要 api-server 和 worker 都能访问 |
 | 提示"AI 助手请求过于频繁" | 超过每分钟请求上限，调整 `rate-limit-per-user-per-minute` |
 | 启动报 AWS SDK 相关 `NoSuchMethodError` | `api-server/libs` 里残留了 2.17.282 版本的 AWS SDK 核心 jar，按 `remove-from-api-server-libs.txt` 删除 |
 

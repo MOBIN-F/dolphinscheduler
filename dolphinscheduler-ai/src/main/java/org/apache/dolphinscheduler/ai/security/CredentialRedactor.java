@@ -103,6 +103,21 @@ public class CredentialRedactor {
     }
 
     /**
+     * Replace the credentials redacted before with their placeholders, e.g. in a tool result echoing a restored
+     * value, so that the value is not sent to the LLM.
+     */
+    public String redactKnown(String text) {
+        if (text == null || placeholderByValue.isEmpty()) {
+            return text;
+        }
+        String result = text;
+        for (Map.Entry<String, String> entry : placeholderByValue.entrySet()) {
+            result = result.replace(entry.getKey(), entry.getValue());
+        }
+        return result;
+    }
+
+    /**
      * Replace the placeholders with a mask, used for the text shown in the chat and kept in the history, so that the
      * credentials are never sent back to the LLM in the next requests.
      */

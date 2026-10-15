@@ -21,6 +21,7 @@ import org.apache.dolphinscheduler.ai.seatunnel.metadata.ConnectorMetadataReposi
 import org.apache.dolphinscheduler.ai.seatunnel.validation.HoconValidator;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -31,26 +32,34 @@ import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 
 /**
- * Tools of the SeaTunnel config assistant, backed by the connector metadata and the local validation.
+ * Tools of the SeaTunnel config assistant, backed by the connector metadata, the local validation and optionally the
+ * HTTP API given by the user.
  */
 public class SeatunnelTools {
 
     static final String LIST_CONNECTORS = "list_connectors";
     static final String GET_CONNECTOR_INFO = "get_connector_info";
     static final String VALIDATE_CONFIG = "validate_config";
+    static final String FETCH_HTTP_SAMPLE = "fetch_http_sample";
 
     private static final List<String> CONNECTOR_TYPES = List.of(ConnectorMetadataRepository.SOURCE,
             ConnectorMetadataRepository.TRANSFORM, ConnectorMetadataRepository.SINK);
 
     private final ConnectorMetadataRepository metadataRepository;
     private final HoconValidator validator;
+    private final HttpSampleFetcher httpSampleFetcher;
     private final ObjectMapper mapper = new ObjectMapper();
     private final List<ToolSpecification> specifications;
 
-    public SeatunnelTools(ConnectorMetadataRepository metadataRepository, HoconValidator validator) {
+    /**
+     * @param httpSampleFetcher calls the HTTP API given by the user, the tool is disabled when null
+     */
+    public SeatunnelTools(ConnectorMetadataRepository metadataRepository, HoconValidator validator,
+                          HttpSampleFetcher httpSampleFetcher) {
         this.metadataRepository = metadataRepository;
         this.validator = validator;
-        this.specifications = List.of(
+        this.httpSampleFetcher = httpSampleFetcher;
+        List<ToolSpecification> specifications = new ArrayList<>(List.of(
                 ToolSpecification.builder()
                         .name(LIST_CONNECTORS)
                         .description("List the installed SeaTunnel source, transform and sink connectors")
@@ -74,7 +83,31 @@ public class SeatunnelTools {
                                 .addStringProperty("config", "The complete HOCON config")
                                 .required("config")
                                 .build())
-                        .build());
+                        .build()));
+        if (httpSampleFetcher != null) {
+            specifications.add(ToolSpecification.builder()
+                    .name(FETCH_HTTP_SAMPLE)
+                    .description("Call the HTTP API the user gave once and get the fields of the response: JSON "
+                            + "paths, types, nullability, a truncated sample value per field and the array of "
+                            + "records. Call it before writing the schema of the Http source. Only URLs the user "
+                            + "wrote can be called. The arguments are the same as the Http source options.")
+                    .parameters(JsonObjectSchema.builder()
+                            .addStringProperty("url", "The full URL, e.g. https://api.example.com/v1/orders")
+                            .addEnumProperty("method", List.of("GET", "POST"))
+                            .addProperty("headers", JsonObjectSchema.builder()
+                                    .description("HTTP headers, e.g. {\"Authorization\": \"Bearer ${_CRED_1_}\"}")
+                                    .additionalProperties(true)
+                                    .build())
+                            .addProperty("params", JsonObjectSchema.builder()
+                                    .description("Query parameters")
+                                    .additionalProperties(true)
+                                    .build())
+                            .addStringProperty("body", "Request body of POST")
+                            .required("url")
+                            .build())
+                    .build());
+        }
+        this.specifications = List.copyOf(specifications);
     }
 
     public List<ToolSpecification> specifications() {
@@ -84,7 +117,7 @@ public class SeatunnelTools {
     /**
      * @return the tool result for the LLM, errors are returned as text so that the LLM can correct the call
      */
-    public String execute(ToolExecutionRequest request) {
+    public String execute(ToolExecutionRequest request, ToolContext context) {
         JsonNode arguments;
         try {
             String raw = request.arguments();
@@ -104,6 +137,11 @@ public class SeatunnelTools {
                                 + " connectors: " + metadataRepository.names(type));
             case VALIDATE_CONFIG:
                 return validator.validate(arguments.path("config").asText()).describe();
+            case FETCH_HTTP_SAMPLE:
+                if (httpSampleFetcher == null) {
+                    return "Unknown tool: " + request.name();
+                }
+                return httpSampleFetcher.fetch(arguments, context);
             default:
                 return "Unknown tool: " + request.name();
         }

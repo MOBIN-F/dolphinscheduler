@@ -16,9 +16,10 @@
 # limitations under the License.
 #
 
-# Update an api server which already has the AI assistant: saves the AI conversations of the tasks.
+# Update an api server which already has the AI assistant: saves the AI conversations of the tasks, and calls the
+# HTTP API given by the user to get the fields for the schema of the Http source.
 # Run the create table SQL (ai_conversation_mysql.sql or ai_conversation_postgresql.sql) first.
-# Usage: install-conversation-update.sh <DOLPHINSCHEDULER_HOME>, then restart the api server.
+# Usage: install-ai-update.sh <DOLPHINSCHEDULER_HOME>, then restart the api server.
 set -eo pipefail
 
 if [ $# -ne 1 ] || [ ! -d "$1/api-server/libs" ]; then
@@ -38,7 +39,7 @@ if [ ! -f "$LIBS/dolphinscheduler-ai-3.4.2.jar" ]; then
 fi
 
 mkdir -p "$BACKUP"
-for jar in dolphinscheduler-api-3.4.2.jar dolphinscheduler-dao-3.4.2.jar; do
+for jar in dolphinscheduler-ai-3.4.2.jar dolphinscheduler-api-3.4.2.jar dolphinscheduler-dao-3.4.2.jar; do
   cp -a "$LIBS/$jar" "$BACKUP/"
   cp "$PACKAGE_DIR/api-server-libs/$jar" "$LIBS/$jar"
   echo "Replaced $jar"

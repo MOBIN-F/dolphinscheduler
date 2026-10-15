@@ -666,6 +666,7 @@ export default {
     ai_status_validating_local: 'Local validation',
     ai_status_validating_engine: 'SeaTunnel engine validation',
     ai_status_fixing: 'Fixing with the validation result (round {n})',
+    ai_status_http_sample: 'Calling the API to get the fields: {target}',
     ai_proposal: 'Proposed change',
     ai_proposal_pending: 'Review the change on the right',
     ai_pending_hint: 'Accept or reject the current change on the right first',

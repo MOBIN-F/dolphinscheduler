@@ -20,3 +20,11 @@ ai:
     metadata-path: ""
     check-timeout: 60s
     max-fix-attempts: 3
+  # Calls the HTTP API given by the user to get the fields for the schema of the Http source, defaults below
+  http-sample:
+    enabled: true
+    timeout: 10s
+    max-response-bytes: 1048576
+    max-calls-per-request: 3
+    # Extra hosts, IPs or CIDRs never called, loopback / link-local (cloud metadata) / multicast are always denied
+    denied-hosts: []

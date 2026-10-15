@@ -18,6 +18,8 @@
 package org.apache.dolphinscheduler.ai.config;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -41,6 +43,8 @@ public class AiProperties {
 
     private final Seatunnel seatunnel = new Seatunnel();
 
+    private final HttpSample httpSample = new HttpSample();
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -63,6 +67,10 @@ public class AiProperties {
 
     public Seatunnel getSeatunnel() {
         return seatunnel;
+    }
+
+    public HttpSample getHttpSample() {
+        return httpSample;
     }
 
     /**
@@ -216,6 +224,69 @@ public class AiProperties {
 
         public void setMaxFixAttempts(int maxFixAttempts) {
             this.maxFixAttempts = maxFixAttempts;
+        }
+    }
+
+    /**
+     * Settings of the tool which calls the HTTP API given by the user to get the fields of the response.
+     */
+    public static class HttpSample {
+
+        private boolean enabled = true;
+
+        private Duration timeout = Duration.ofSeconds(10);
+
+        /**
+         * The response is truncated after this size.
+         */
+        private int maxResponseBytes = 1024 * 1024;
+
+        private int maxCallsPerRequest = 3;
+
+        /**
+         * Hosts, IPs or CIDRs which are never called, in addition to the loopback, link-local (e.g. the cloud
+         * metadata service), any-local and multicast addresses.
+         */
+        private List<String> deniedHosts = new ArrayList<>();
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public Duration getTimeout() {
+            return timeout;
+        }
+
+        public void setTimeout(Duration timeout) {
+            this.timeout = timeout;
+        }
+
+        public int getMaxResponseBytes() {
+            return maxResponseBytes;
+        }
+
+        public void setMaxResponseBytes(int maxResponseBytes) {
+            this.maxResponseBytes = maxResponseBytes;
+        }
+
+        public int getMaxCallsPerRequest() {
+            return maxCallsPerRequest;
+        }
+
+        public void setMaxCallsPerRequest(int maxCallsPerRequest) {
+            this.maxCallsPerRequest = maxCallsPerRequest;
+        }
+
+        public List<String> getDeniedHosts() {
+            return deniedHosts;
+        }
+
+        public void setDeniedHosts(List<String> deniedHosts) {
+            this.deniedHosts = deniedHosts;
         }
     }
 }

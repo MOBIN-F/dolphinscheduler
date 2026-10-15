@@ -27,6 +27,7 @@ public interface AgentEventListener {
     String STATUS_VALIDATING_LOCAL = "validating_local";
     String STATUS_VALIDATING_ENGINE = "validating_engine";
     String STATUS_FIXING = "fixing";
+    String STATUS_HTTP_SAMPLE = "http_sample";
 
     /**
      * A chunk of the assistant reply.

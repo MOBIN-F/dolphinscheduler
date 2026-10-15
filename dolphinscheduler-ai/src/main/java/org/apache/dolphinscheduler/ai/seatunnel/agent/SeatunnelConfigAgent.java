@@ -31,6 +31,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -89,6 +90,17 @@ public class SeatunnelConfigAgent {
     public SeatunnelConfigAgent(StreamingChatModel mainModel, ChatModel fastModel, int maxTokens, Duration timeout,
                                 ConnectorMetadataRepository metadataRepository, HoconValidator validator,
                                 SeatunnelEngineChecker engineChecker, int maxFixAttempts) {
+        this(mainModel, fastModel, maxTokens, timeout, metadataRepository, validator, engineChecker, maxFixAttempts,
+                null);
+    }
+
+    /**
+     * @param httpSampleFetcher calls the HTTP API given by the user to get the fields, disabled when null
+     */
+    public SeatunnelConfigAgent(StreamingChatModel mainModel, ChatModel fastModel, int maxTokens, Duration timeout,
+                                ConnectorMetadataRepository metadataRepository, HoconValidator validator,
+                                SeatunnelEngineChecker engineChecker, int maxFixAttempts,
+                                HttpSampleFetcher httpSampleFetcher) {
         this.mainModel = mainModel;
         this.fastModel = fastModel;
         this.maxTokens = maxTokens;
@@ -97,7 +109,7 @@ public class SeatunnelConfigAgent {
         this.validator = validator;
         this.engineChecker = engineChecker;
         this.maxFixAttempts = maxFixAttempts;
-        this.tools = new SeatunnelTools(metadataRepository, validator);
+        this.tools = new SeatunnelTools(metadataRepository, validator, httpSampleFetcher);
         this.systemTemplate = loadPrompt("system.md");
         this.fixTemplate = loadPrompt("fix.md");
         this.goldenExamples = loadPrompt("golden-examples.md");
@@ -124,9 +136,10 @@ public class SeatunnelConfigAgent {
         messages.add(SystemMessage.from(buildSystemPrompt(request, redactor)));
         messages.addAll(buildHistory(request, redactor));
         messages.add(UserMessage.from(buildUserMessage(request, redactor)));
+        ToolContext toolContext = new ToolContext(redactor, allowedHosts(request));
 
         listener.onStatus(AgentEventListener.STATUS_THINKING, null);
-        String reply = runWithTools(messages, listener, true, cancelled);
+        String reply = runWithTools(messages, toolContext, listener, true, cancelled);
         String config = extractConfig(reply);
         String explanation = removeConfig(reply);
         if (config == null) {
@@ -155,7 +168,7 @@ public class SeatunnelConfigAgent {
             listener.onStatus(AgentEventListener.STATUS_FIXING, String.valueOf(fixAttempts));
             String validation = (local.valid() ? engine : local).describe();
             messages.add(UserMessage.from(fixTemplate.replace("{{VALIDATION}}", validation)));
-            String fixReply = runWithTools(messages, listener, false, cancelled);
+            String fixReply = runWithTools(messages, toolContext, listener, false, cancelled);
             String fixedConfig = extractConfig(fixReply);
             if (fixedConfig == null) {
                 break;
@@ -174,8 +187,8 @@ public class SeatunnelConfigAgent {
      * @param streamText whether the text of the reply is streamed to the user
      * @return the final text reply
      */
-    private String runWithTools(List<ChatMessage> messages, AgentEventListener listener, boolean streamText,
-                                BooleanSupplier cancelled) throws Exception {
+    private String runWithTools(List<ChatMessage> messages, ToolContext toolContext, AgentEventListener listener,
+                                boolean streamText, BooleanSupplier cancelled) throws Exception {
         for (int round = 0; round < MAX_TOOL_ROUNDS; round++) {
             if (cancelled.getAsBoolean()) {
                 throw new CancelledException();
@@ -187,8 +200,15 @@ public class SeatunnelConfigAgent {
                 return aiMessage.text() == null ? "" : aiMessage.text();
             }
             for (ToolExecutionRequest toolRequest : aiMessage.toolExecutionRequests()) {
-                listener.onStatus(AgentEventListener.STATUS_TOOL, toolRequest.name() + " " + toolRequest.arguments());
-                messages.add(ToolExecutionResultMessage.from(toolRequest, tools.execute(toolRequest)));
+                if (SeatunnelTools.FETCH_HTTP_SAMPLE.equals(toolRequest.name())) {
+                    // The query and the headers may contain credentials, only the target is shown
+                    listener.onStatus(AgentEventListener.STATUS_HTTP_SAMPLE,
+                            HttpSampleFetcher.describeTarget(toolRequest.arguments()));
+                } else {
+                    listener.onStatus(AgentEventListener.STATUS_TOOL,
+                            toolRequest.name() + " " + toolRequest.arguments());
+                }
+                messages.add(ToolExecutionResultMessage.from(toolRequest, tools.execute(toolRequest, toolContext)));
             }
             if (streamText) {
                 listener.onDelta("\n");
@@ -273,6 +293,19 @@ public class SeatunnelConfigAgent {
                         ? (ChatMessage) UserMessage.from(redactor.redactText(turn.content()))
                         : AiMessage.from(redactor.redactText(turn.content())))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * The HTTP tool only calls the hosts the user wrote, not the ones the LLM made up or read in a response.
+     */
+    private static Set<String> allowedHosts(SeatunnelChatRequest request) {
+        List<String> texts = new ArrayList<>();
+        texts.add(request.userInput());
+        texts.add(request.currentScript());
+        request.history().stream()
+                .filter(turn -> ChatTurn.USER.equals(turn.role()))
+                .forEach(turn -> texts.add(turn.content()));
+        return HttpSampleFetcher.allowedHosts(texts.toArray(new String[0]));
     }
 
     private String buildUserMessage(SeatunnelChatRequest request, CredentialRedactor redactor) {

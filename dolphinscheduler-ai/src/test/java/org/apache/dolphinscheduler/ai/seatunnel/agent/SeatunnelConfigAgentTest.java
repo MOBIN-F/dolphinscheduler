@@ -126,6 +126,39 @@ public class SeatunnelConfigAgentTest {
     }
 
     @Test
+    public void testHttpSampleOnlyCallsHostsOfTheUser() {
+        ScriptedModel model = new ScriptedModel();
+        model.replies.add(AiMessage.from(ToolExecutionRequest.builder().id("1").name("fetch_http_sample")
+                .arguments("{\"url\":\"http://made-up.example/api?token=1\"}").build()));
+        model.replies.add(AiMessage.from("Please give me a sample response."));
+        ConnectorMetadataRepository repository = ConnectorMetadataRepository.load("", "2.3.13");
+        SeatunnelConfigAgent agent = new SeatunnelConfigAgent(model, (ChatModel) null, 4096, Duration.ofSeconds(10),
+                repository, new HoconValidator(repository), new SeatunnelEngineChecker("", Duration.ofSeconds(10)),
+                3, new HttpSampleFetcher(Duration.ofSeconds(1), 1024, 3, List.of(), false));
+        RecordingListener listener = new RecordingListener();
+        agent.chat(new SeatunnelChatRequest(List.of(new ChatTurn("user", "api is https://api.shop.com/orders")),
+                "sync it to console", "", Map.of()), listener, () -> false);
+        Assertions.assertTrue(listener.statuses.contains("http_sample:GET http://made-up.example/api"),
+                listener.statuses.toString());
+        ToolExecutionResultMessage toolResult = (ToolExecutionResultMessage) model.requests.get(1)
+                .get(model.requests.get(1).size() - 1);
+        Assertions.assertTrue(toolResult.text().contains("made-up.example:80 is not given by the user"),
+                toolResult.text());
+    }
+
+    @Test
+    public void testHttpSampleToolDisabled() {
+        ConnectorMetadataRepository repository = ConnectorMetadataRepository.load("", "2.3.13");
+        SeatunnelTools disabled = new SeatunnelTools(repository, new HoconValidator(repository), null);
+        Assertions.assertTrue(disabled.specifications().stream()
+                .noneMatch(spec -> spec.name().equals(SeatunnelTools.FETCH_HTTP_SAMPLE)));
+        SeatunnelTools enabled = new SeatunnelTools(repository, new HoconValidator(repository),
+                new HttpSampleFetcher(Duration.ofSeconds(1), 1024, 3, List.of(), false));
+        Assertions.assertTrue(enabled.specifications().stream()
+                .anyMatch(spec -> spec.name().equals(SeatunnelTools.FETCH_HTTP_SAMPLE)));
+    }
+
+    @Test
     public void testExtractConfig() {
         Assertions.assertNull(SeatunnelConfigAgent.extractConfig("no config"));
         Assertions.assertEquals("source {}\nsink {}",

@@ -134,6 +134,9 @@ export default defineComponent({
       if (status === 'fixing') {
         return t('project.node.ai_status_fixing', { n: detail })
       }
+      if (status === 'http_sample') {
+        return t('project.node.ai_status_http_sample', { target: detail || '' })
+      }
       return t('project.node.ai_status_' + status)
     }
 
