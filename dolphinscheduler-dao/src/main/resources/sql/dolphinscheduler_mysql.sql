@@ -1309,6 +1309,28 @@ CREATE TABLE `t_ds_fav_task`
   AUTO_INCREMENT = 1
   DEFAULT CHARSET = utf8 COLLATE = utf8_bin;
 
+-- ----------------------------
+-- Table structure for t_ds_ai_conversation
+-- ----------------------------
+DROP TABLE IF EXISTS `t_ds_ai_conversation`;
+CREATE TABLE `t_ds_ai_conversation`
+(
+    `id`           bigint      NOT NULL AUTO_INCREMENT COMMENT 'id',
+    `task_code`    bigint      NOT NULL COMMENT 'task definition code',
+    `project_code` bigint      NOT NULL COMMENT 'project code',
+    `assistant`    varchar(32) NOT NULL COMMENT 'assistant type, e.g. seatunnel',
+    `messages`     longtext COMMENT 'messages json, without credentials and generated scripts',
+    `create_user`  int         DEFAULT NULL COMMENT 'create user id',
+    `update_user`  int         DEFAULT NULL COMMENT 'update user id',
+    `create_time`  datetime    DEFAULT NULL COMMENT 'create time',
+    `update_time`  datetime    DEFAULT NULL COMMENT 'update time',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uniq_ai_conversation_task` (`task_code`, `assistant`)
+) ENGINE = InnoDB
+  AUTO_INCREMENT = 1
+  DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_bin;
+
+
 
 DROP TABLE IF EXISTS `t_ds_relation_sub_workflow`;
 CREATE TABLE `t_ds_relation_sub_workflow` (

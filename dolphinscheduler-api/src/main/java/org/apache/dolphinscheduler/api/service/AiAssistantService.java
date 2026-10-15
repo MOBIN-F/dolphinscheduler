@@ -17,6 +17,8 @@
 
 package org.apache.dolphinscheduler.api.service;
 
+import org.apache.dolphinscheduler.api.dto.ai.AiConversationRequest;
+import org.apache.dolphinscheduler.api.dto.ai.AiConversationVO;
 import org.apache.dolphinscheduler.api.dto.ai.SeatunnelAiChatRequest;
 import org.apache.dolphinscheduler.dao.entity.User;
 
@@ -39,4 +41,19 @@ public interface AiAssistantService {
      * {@code status}, {@code delta}, {@code proposal}, {@code done} and {@code error}.
      */
     SseEmitter seatunnelChat(User loginUser, SeatunnelAiChatRequest request);
+
+    /**
+     * Query the saved conversation of a task, it is shared by the editors of the task.
+     */
+    AiConversationVO queryConversation(User loginUser, long projectCode, long taskCode, String assistant);
+
+    /**
+     * Save the whole conversation of a task, the credentials are redacted and the size is limited.
+     */
+    void saveConversation(User loginUser, AiConversationRequest request);
+
+    /**
+     * Delete the conversation of a task.
+     */
+    void deleteConversation(User loginUser, long projectCode, long taskCode, String assistant);
 }

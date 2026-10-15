@@ -16,7 +16,17 @@
  */
 
 import { defineComponent, nextTick, PropType, ref, watch } from 'vue'
-import { NButton, NInput, NSpin, NTag } from 'naive-ui'
+import {
+  NButton,
+  NDivider,
+  NIcon,
+  NInput,
+  NPopconfirm,
+  NSpin,
+  NTag
+} from 'naive-ui'
+import { DeleteOutlined } from '@vicons/antd'
+import { format } from 'date-fns'
 import { useI18n } from 'vue-i18n'
 import { renderMarkdown } from './markdown'
 import styles from './index.module.scss'
@@ -85,6 +95,22 @@ export default defineComponent({
       }
     }
 
+    const clearing = ref(false)
+    const clear = async () => {
+      clearing.value = true
+      try {
+        await props.session.clear()
+        window.$message.success(t('project.node.ai_cleared'))
+      } catch (e: any) {
+        window.$message.error(e?.message || String(e))
+      } finally {
+        clearing.value = false
+      }
+    }
+
+    const formatTime = (time?: number) =>
+      time ? format(new Date(time), 'yyyy-MM-dd HH:mm') : ''
+
     const formatStatus = (status: string, detail: string | null) => {
       if (status === 'tool' && detail) {
         const [name, ...rest] = detail.split(' ')
@@ -126,15 +152,17 @@ export default defineComponent({
               <NTag size='small' type='success' bordered={false}>
                 {t('project.node.ai_accepted')}
               </NTag>
-              <NButton
-                text
-                size='tiny'
-                type='primary'
-                disabled={session.state.sending}
-                onClick={() => session.revert(message.id)}
-              >
-                {t('project.node.ai_revert')}
-              </NButton>
+              {message.checkpoint && (
+                <NButton
+                  text
+                  size='tiny'
+                  type='primary'
+                  disabled={session.state.sending}
+                  onClick={() => session.revert(message.id)}
+                >
+                  {t('project.node.ai_revert')}
+                </NButton>
+              )}
             </div>
           )
         case 'rejected':
@@ -149,19 +177,27 @@ export default defineComponent({
               <NTag size='small' type='warning' bordered={false}>
                 {t('project.node.ai_reverted')}
               </NTag>
-              <NButton
-                text
-                size='tiny'
-                type='primary'
-                disabled={
-                  session.state.sending ||
-                  session.state.pendingMessageId !== null
-                }
-                onClick={() => session.redo(message.id)}
-              >
-                {t('project.node.ai_redo')}
-              </NButton>
+              {message.checkpoint && (
+                <NButton
+                  text
+                  size='tiny'
+                  type='primary'
+                  disabled={
+                    session.state.sending ||
+                    session.state.pendingMessageId !== null
+                  }
+                  onClick={() => session.redo(message.id)}
+                >
+                  {t('project.node.ai_redo')}
+                </NButton>
+              )}
             </div>
+          )
+        case 'expired':
+          return (
+            <NTag size='small' bordered={false}>
+              {t('project.node.ai_expired')}
+            </NTag>
           )
         default:
           return null
@@ -177,6 +213,11 @@ export default defineComponent({
       if (message.role === 'user') {
         return (
           <div class={classes} key={message.id}>
+            {message.userName && (
+              <div class={styles.sender}>
+                {message.userName} · {formatTime(message.time)}
+              </div>
+            )}
             <div class={styles.bubble}>{message.content}</div>
           </div>
         )
@@ -216,6 +257,33 @@ export default defineComponent({
       )
     }
 
+    const renderMessages = () => {
+      const { state } = props.session
+      const restoredCount = state.messages.filter((m) => m.restored).length
+      const nodes = []
+      if (restoredCount > 0) {
+        nodes.push(
+          <NDivider class={styles['history-divider']} key='history'>
+            {t('project.node.ai_history', {
+              time: (state.restoredUpdateTime || '').slice(0, 16),
+              user: state.restoredUpdateUserName || ''
+            })}
+          </NDivider>
+        )
+      }
+      state.messages.forEach((message, index) => {
+        if (restoredCount > 0 && index === restoredCount) {
+          nodes.push(
+            <NDivider class={styles['history-divider']} key='current'>
+              {t('project.node.ai_current_chat')}
+            </NDivider>
+          )
+        }
+        nodes.push(renderMessage(message))
+      })
+      return nodes
+    }
+
     return () => {
       const { state } = props.session
       const pending = state.pendingMessageId !== null
@@ -225,17 +293,37 @@ export default defineComponent({
             <span class={styles['chat-title']}>
               {props.title || t('project.node.ai_assistant')}
             </span>
-            <NButton
-              text
-              size='small'
-              disabled={state.sending || !state.messages.length}
-              onClick={() => props.session.clear()}
-            >
-              {t('project.node.ai_new_chat')}
-            </NButton>
+            <NPopconfirm onPositiveClick={clear}>
+              {{
+                default: () => t('project.node.ai_clear_confirm'),
+                trigger: () => (
+                  <NButton
+                    text
+                    size='small'
+                    loading={clearing.value}
+                    disabled={
+                      state.sending || state.loading || !state.messages.length
+                    }
+                  >
+                    {{
+                      icon: () => (
+                        <NIcon>
+                          <DeleteOutlined />
+                        </NIcon>
+                      ),
+                      default: () => t('project.node.ai_clear_history')
+                    }}
+                  </NButton>
+                )
+              }}
+            </NPopconfirm>
           </div>
           <div class={styles['chat-messages']} ref={list}>
-            {state.messages.length === 0 ? (
+            {state.loading ? (
+              <div class={styles.welcome}>
+                <NSpin size='small' />
+              </div>
+            ) : state.messages.length === 0 ? (
               <div class={styles.welcome}>
                 <p>{t('project.node.ai_welcome')}</p>
                 {props.examples.map((example) => (
@@ -248,7 +336,7 @@ export default defineComponent({
                 ))}
               </div>
             ) : (
-              state.messages.map(renderMessage)
+              renderMessages()
             )}
           </div>
           <div class={styles['chat-input']}>
@@ -264,7 +352,7 @@ export default defineComponent({
               placeholder={
                 props.placeholder || t('project.node.ai_placeholder')
               }
-              disabled={pending}
+              disabled={pending || state.loading}
             />
             <div class={styles['chat-actions']}>
               {state.sending ? (

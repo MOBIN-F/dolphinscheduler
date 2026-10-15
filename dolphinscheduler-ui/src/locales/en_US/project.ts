@@ -652,6 +652,13 @@ export default {
     ai_send: 'Send',
     ai_stop: 'Stop',
     ai_new_chat: 'New chat',
+    ai_clear_history: 'Clear chat history',
+    ai_clear_confirm:
+      'All editors of this task will no longer see this conversation and it can not be restored, clear it?',
+    ai_cleared: 'Chat history cleared',
+    ai_history: 'History · last updated {time} by {user}',
+    ai_current_chat: 'Current chat',
+    ai_expired: 'Expired (not reviewed)',
     ai_status_thinking: 'Thinking',
     ai_status_connector: 'Checking the options of {name} ({type})',
     ai_status_list_connectors: 'Checking the available connectors',

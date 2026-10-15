@@ -21,4 +21,30 @@ interface AiStatus {
   seatunnelVersion: string
 }
 
-export { AiStatus }
+interface AiConversationQuery {
+  projectCode: number
+  taskCode: number
+  assistant: string
+}
+
+/**
+ * A saved message, the generated scripts and the checkpoints are not saved
+ */
+interface SavedMessage {
+  role: 'user' | 'assistant'
+  content: string
+  userName?: string
+  time?: number
+  proposalState?: string
+  valid?: boolean
+  fixAttempts?: number
+  error?: string
+}
+
+interface AiConversation {
+  messages: SavedMessage[]
+  updateTime: string | null
+  updateUserName: string | null
+}
+
+export { AiStatus, AiConversationQuery, SavedMessage, AiConversation }

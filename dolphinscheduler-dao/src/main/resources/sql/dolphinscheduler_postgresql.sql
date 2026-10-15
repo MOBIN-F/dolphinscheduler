@@ -1327,6 +1327,27 @@ CREATE TABLE t_ds_fav_task
     PRIMARY KEY (id)
 );
 
+--
+-- Table structure for t_ds_ai_conversation
+--
+
+DROP TABLE IF EXISTS t_ds_ai_conversation;
+CREATE TABLE t_ds_ai_conversation
+(
+    id           bigserial   NOT NULL,
+    task_code    bigint      NOT NULL,
+    project_code bigint      NOT NULL,
+    assistant    varchar(32) NOT NULL,
+    messages     text,
+    create_user  int         DEFAULT NULL,
+    update_user  int         DEFAULT NULL,
+    create_time  timestamp   DEFAULT NULL,
+    update_time  timestamp   DEFAULT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uniq_ai_conversation_task UNIQUE (task_code, assistant)
+);
+
+
 DROP TABLE IF EXISTS t_ds_relation_sub_workflow;
 CREATE TABLE t_ds_relation_sub_workflow (
     id        serial      NOT NULL,

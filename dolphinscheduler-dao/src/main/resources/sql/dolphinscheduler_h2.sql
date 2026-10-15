@@ -1325,6 +1325,26 @@ CREATE TABLE t_ds_fav_task
     PRIMARY KEY (id)
 );
 
+--
+-- Table structure for t_ds_ai_conversation
+--
+DROP TABLE IF EXISTS t_ds_ai_conversation CASCADE;
+CREATE TABLE t_ds_ai_conversation
+(
+    id           bigint(20)  NOT NULL AUTO_INCREMENT,
+    task_code    bigint(20)  NOT NULL,
+    project_code bigint(20)  NOT NULL,
+    assistant    varchar(32) NOT NULL,
+    messages     longtext,
+    create_user  int         DEFAULT NULL,
+    update_user  int         DEFAULT NULL,
+    create_time  datetime    DEFAULT NULL,
+    update_time  datetime    DEFAULT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uniq_ai_conversation_task (task_code, assistant)
+);
+
+
 
 DROP TABLE IF EXISTS t_ds_relation_sub_workflow;
 CREATE TABLE t_ds_relation_sub_workflow (

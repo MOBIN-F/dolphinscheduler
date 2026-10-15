@@ -633,6 +633,13 @@ export default {
     ai_send: '发送',
     ai_stop: '停止',
     ai_new_chat: '新对话',
+    ai_clear_history: '清空聊天记录',
+    ai_clear_confirm:
+      '清空后该任务的所有编辑者都将看不到这段对话，且无法恢复，确定清空吗？',
+    ai_cleared: '已清空聊天记录',
+    ai_history: '以下为历史对话 · 最后更新 {time} by {user}',
+    ai_current_chat: '本次对话',
+    ai_expired: '已过期（未确认）',
     ai_status_thinking: '思考中',
     ai_status_connector: '查询 {name}（{type}）的参数',
     ai_status_list_connectors: '查询可用的 connector',

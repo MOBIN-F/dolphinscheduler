@@ -1,0 +1,22 @@
+# Append to api-server/conf/application.yaml (top level, same level as `security:`), then restart the api server.
+ai:
+  enabled: true
+  # Max requests per user per minute, 0 means no limit
+  rate-limit-per-user-per-minute: 10
+  llm:
+    region: us-east-1
+    model: us.anthropic.claude-sonnet-5-5
+    fast-model: us.anthropic.claude-haiku-5-5
+    # Leave empty to use the EC2 instance role (recommended) or the AWS_BEARER_TOKEN_BEDROCK environment variable
+    access-key-id: ""
+    secret-access-key: ""
+    timeout: 120s
+    max-tokens: 8192
+  seatunnel:
+    version: 2.3.13
+    # SeaTunnel installation on the api server machine, enables the engine validation
+    home: /opt/seatunnel-2.3.13
+    # Re-export with seatunnel-metadata-exporter/export.sh when more connectors are installed, empty for the built-in
+    metadata-path: ""
+    check-timeout: 60s
+    max-fix-attempts: 3

@@ -17,6 +17,8 @@
 
 package org.apache.dolphinscheduler.api.controller;
 
+import org.apache.dolphinscheduler.api.dto.ai.AiConversationRequest;
+import org.apache.dolphinscheduler.api.dto.ai.AiConversationVO;
 import org.apache.dolphinscheduler.api.dto.ai.SeatunnelAiChatRequest;
 import org.apache.dolphinscheduler.api.service.AiAssistantService;
 import org.apache.dolphinscheduler.api.utils.Result;
@@ -27,11 +29,14 @@ import java.util.Map;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -69,5 +74,35 @@ public class AiAssistantController extends BaseController {
     public SseEmitter seatunnelChat(@Parameter(hidden = true) @RequestAttribute(value = Constants.SESSION_USER) User loginUser,
                                     @RequestBody SeatunnelAiChatRequest request) {
         return aiAssistantService.seatunnelChat(loginUser, request);
+    }
+
+    @Operation(summary = "queryAiConversation", description = "QUERY_AI_CONVERSATION_NOTES")
+    @GetMapping(value = "/conversations")
+    @ResponseStatus(HttpStatus.OK)
+    public Result<AiConversationVO> queryConversation(@Parameter(hidden = true) @RequestAttribute(value = Constants.SESSION_USER) User loginUser,
+                                                      @RequestParam("projectCode") long projectCode,
+                                                      @RequestParam("taskCode") long taskCode,
+                                                      @RequestParam(value = "assistant", defaultValue = "seatunnel") String assistant) {
+        return Result.success(aiAssistantService.queryConversation(loginUser, projectCode, taskCode, assistant));
+    }
+
+    @Operation(summary = "saveAiConversation", description = "SAVE_AI_CONVERSATION_NOTES")
+    @PutMapping(value = "/conversations", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseStatus(HttpStatus.OK)
+    public Result<Void> saveConversation(@Parameter(hidden = true) @RequestAttribute(value = Constants.SESSION_USER) User loginUser,
+                                         @RequestBody AiConversationRequest request) {
+        aiAssistantService.saveConversation(loginUser, request);
+        return Result.success();
+    }
+
+    @Operation(summary = "deleteAiConversation", description = "DELETE_AI_CONVERSATION_NOTES")
+    @DeleteMapping(value = "/conversations")
+    @ResponseStatus(HttpStatus.OK)
+    public Result<Void> deleteConversation(@Parameter(hidden = true) @RequestAttribute(value = Constants.SESSION_USER) User loginUser,
+                                           @RequestParam("projectCode") long projectCode,
+                                           @RequestParam("taskCode") long taskCode,
+                                           @RequestParam(value = "assistant", defaultValue = "seatunnel") String assistant) {
+        aiAssistantService.deleteConversation(loginUser, projectCode, taskCode, assistant);
+        return Result.success();
     }
 }

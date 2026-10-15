@@ -17,6 +17,7 @@
 
 import { computed, reactive } from 'vue'
 import { postSse } from './sse'
+import type { SavedMessage } from '@/service/modules/ai/types'
 import type { ChatMessage, HistoryTurn, Proposal } from './types'
 
 export interface AiSessionOptions {
@@ -27,7 +28,27 @@ export interface AiSessionOptions {
   buildBody: (userInput: string, history: HistoryTurn[]) => unknown
   getScript: () => string
   setScript: (script: string) => void
+  /**
+   * The current user, shown as the sender of the user messages
+   */
+  userName?: () => string
+  /**
+   * Saves the conversation, e.g. on the server for the task, when set
+   */
+  persistence?: AiSessionPersistence
 }
+
+export interface AiSessionPersistence {
+  load: () => Promise<{
+    messages: SavedMessage[]
+    updateTime: string | null
+    updateUserName: string | null
+  }>
+  save: (messages: SavedMessage[]) => Promise<void>
+  clear: () => Promise<void>
+}
+
+const SAVE_DELAY_MILLIS = 500
 
 const CREDENTIAL_PLACEHOLDER = /\$\{_CRED_\d+_}/g
 
@@ -39,10 +60,16 @@ export function useAiSession(options: AiSessionOptions) {
   const state = reactive({
     messages: [] as ChatMessage[],
     sending: false,
-    pendingMessageId: null as number | null
+    pendingMessageId: null as number | null,
+    // Loading the saved conversation, sending is disabled meanwhile
+    loading: !!options.persistence,
+    // Info of the saved conversation shown above the restored messages
+    restoredUpdateTime: null as string | null,
+    restoredUpdateUserName: null as string | null
   })
   let controller: AbortController | null = null
   let nextId = 1
+  let saveTimer: ReturnType<typeof setTimeout> | null = null
 
   const pending = computed(() =>
     state.messages.find((message) => message.id === state.pendingMessageId)
@@ -59,28 +86,107 @@ export function useAiSession(options: AiSessionOptions) {
       )
       .map((message) => ({
         role: message.role,
-        content: message.proposal
+        content: message.proposalState
           ? message.content + proposalNote(message)
           : message.content
       }))
 
+  const toSaved = (): SavedMessage[] =>
+    state.messages
+      .filter((message) => !message.streaming)
+      .map((message) => ({
+        role: message.role,
+        content: message.content,
+        userName: message.userName,
+        time: message.time,
+        // A proposal waiting for the decision can not be accepted after reopening
+        proposalState:
+          message.proposalState === 'pending'
+            ? 'expired'
+            : message.proposalState,
+        valid: message.proposal ? message.proposal.valid : message.valid,
+        fixAttempts: message.proposal
+          ? message.proposal.fixAttempts
+          : message.fixAttempts,
+        error: message.error
+      }))
+
+  const save = async () => {
+    if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = null
+    if (!options.persistence || state.loading) return
+    try {
+      await options.persistence.save(toSaved())
+    } catch (e) {
+      // The conversation still works without saving
+    }
+  }
+
+  const scheduleSave = () => {
+    if (!options.persistence) return
+    if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = setTimeout(save, SAVE_DELAY_MILLIS)
+  }
+
+  /**
+   * Load the saved conversation, the restored messages are context of the following turns.
+   */
+  let loaded = false
+  const load = async () => {
+    if (!options.persistence || loaded) return
+    loaded = true
+    try {
+      const saved = await options.persistence.load()
+      const restored: ChatMessage[] = (saved.messages || []).map((message) => ({
+        id: nextId++,
+        role: message.role,
+        content: message.content || '',
+        statuses: [],
+        streaming: false,
+        restored: true,
+        userName: message.userName,
+        time: message.time,
+        proposalState: message.proposalState as ChatMessage['proposalState'],
+        valid: message.valid,
+        fixAttempts: message.fixAttempts,
+        error: message.error
+      }))
+      state.messages = [...restored, ...state.messages]
+      state.restoredUpdateTime = saved.updateTime
+      state.restoredUpdateUserName = saved.updateUserName
+    } catch (e) {
+      // Start with an empty conversation
+    } finally {
+      state.loading = false
+    }
+  }
+
   const send = async (input: string) => {
     const userInput = input.trim()
-    if (!userInput || state.sending || state.pendingMessageId !== null) return
+    if (
+      !userInput ||
+      state.sending ||
+      state.loading ||
+      state.pendingMessageId !== null
+    )
+      return
     const body = options.buildBody(userInput, history())
     state.messages.push({
       id: nextId++,
       role: 'user',
       content: userInput,
       statuses: [],
-      streaming: false
+      streaming: false,
+      userName: options.userName?.(),
+      time: Date.now()
     })
     state.messages.push({
       id: nextId++,
       role: 'assistant',
       content: '',
       statuses: [],
-      streaming: true
+      streaming: true,
+      time: Date.now()
     })
     // Work on the reactive proxy so that the updates are rendered
     const reply = state.messages[state.messages.length - 1]
@@ -115,6 +221,7 @@ export function useAiSession(options: AiSessionOptions) {
       reply.streaming = false
       state.sending = false
       controller = null
+      scheduleSave()
     }
   }
 
@@ -127,6 +234,7 @@ export function useAiSession(options: AiSessionOptions) {
     options.setScript(script)
     message.proposalState = 'accepted'
     state.pendingMessageId = null
+    scheduleSave()
   }
 
   const reject = () => {
@@ -134,6 +242,7 @@ export function useAiSession(options: AiSessionOptions) {
     if (!message) return
     message.proposalState = 'rejected'
     state.pendingMessageId = null
+    scheduleSave()
   }
 
   /**
@@ -153,6 +262,7 @@ export function useAiSession(options: AiSessionOptions) {
       item.reverted = true
       if (item.proposalState === 'accepted') item.proposalState = 'reverted'
     }
+    scheduleSave()
   }
 
   /**
@@ -174,15 +284,46 @@ export function useAiSession(options: AiSessionOptions) {
       state.messages[i].reverted = false
     }
     message.proposalState = 'accepted'
+    scheduleSave()
   }
 
-  const clear = () => {
+  /**
+   * Clear the conversation, the saved conversation is deleted as well.
+   */
+  const clear = async () => {
     stop()
+    if (saveTimer) clearTimeout(saveTimer)
+    saveTimer = null
+    if (options.persistence) {
+      await options.persistence.clear()
+    }
     state.messages = []
     state.pendingMessageId = null
+    state.restoredUpdateTime = null
+    state.restoredUpdateUserName = null
   }
 
-  return { state, pending, send, stop, accept, reject, revert, redo, clear }
+  /**
+   * Stop the request and save the pending changes immediately, e.g. when the dialog is closed.
+   */
+  const dispose = () => {
+    stop()
+    if (saveTimer) save()
+  }
+
+  return {
+    state,
+    pending,
+    load,
+    send,
+    stop,
+    accept,
+    reject,
+    revert,
+    redo,
+    clear,
+    dispose
+  }
 }
 
 export type AiSession = ReturnType<typeof useAiSession>

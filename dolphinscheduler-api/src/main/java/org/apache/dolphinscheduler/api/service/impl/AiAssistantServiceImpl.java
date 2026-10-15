@@ -27,17 +27,25 @@ import org.apache.dolphinscheduler.ai.seatunnel.agent.SeatunnelProposal;
 import org.apache.dolphinscheduler.ai.seatunnel.validation.SeatunnelEngineChecker;
 import org.apache.dolphinscheduler.ai.seatunnel.validation.ValidationIssue;
 import org.apache.dolphinscheduler.ai.seatunnel.validation.ValidationResult;
+import org.apache.dolphinscheduler.ai.security.CredentialRedactor;
+import org.apache.dolphinscheduler.api.dto.ai.AiConversationMessage;
+import org.apache.dolphinscheduler.api.dto.ai.AiConversationRequest;
+import org.apache.dolphinscheduler.api.dto.ai.AiConversationVO;
 import org.apache.dolphinscheduler.api.dto.ai.SeatunnelAiChatRequest;
 import org.apache.dolphinscheduler.api.enums.Status;
 import org.apache.dolphinscheduler.api.exceptions.ServiceException;
 import org.apache.dolphinscheduler.api.service.AiAssistantService;
 import org.apache.dolphinscheduler.api.service.ProjectService;
 import org.apache.dolphinscheduler.common.utils.JSONUtils;
+import org.apache.dolphinscheduler.dao.entity.AiConversation;
 import org.apache.dolphinscheduler.dao.entity.User;
+import org.apache.dolphinscheduler.dao.repository.AiConversationDao;
+import org.apache.dolphinscheduler.dao.repository.UserDao;
 
 import org.apache.commons.lang3.StringUtils;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
@@ -46,6 +54,8 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
@@ -61,6 +71,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -72,10 +83,18 @@ public class AiAssistantServiceImpl implements AiAssistantService {
     private static final long EMITTER_TIMEOUT_MILLIS = TimeUnit.MINUTES.toMillis(10);
     private static final long RATE_LIMIT_WINDOW_MILLIS = TimeUnit.MINUTES.toMillis(1);
 
+    private static final Set<String> ASSISTANTS = Set.of("seatunnel");
+    private static final Set<String> ROLES = Set.of("user", "assistant");
+    private static final int MAX_SAVED_MESSAGES = 200;
+    private static final int MAX_MESSAGE_LENGTH = 20000;
+    private static final int MAX_CONVERSATION_BYTES = 1024 * 1024;
+
     private final AiProperties aiProperties;
     private final ObjectProvider<SeatunnelConfigAgent> seatunnelAgent;
     private final ObjectProvider<SeatunnelEngineChecker> engineChecker;
     private final ProjectService projectService;
+    private final AiConversationDao aiConversationDao;
+    private final UserDao userDao;
 
     /**
      * Each request runs several LLM calls and a validation process, so the concurrency is bounded.
@@ -92,11 +111,14 @@ public class AiAssistantServiceImpl implements AiAssistantService {
 
     public AiAssistantServiceImpl(AiProperties aiProperties, ObjectProvider<SeatunnelConfigAgent> seatunnelAgent,
                                   ObjectProvider<SeatunnelEngineChecker> engineChecker,
-                                  ProjectService projectService) {
+                                  ProjectService projectService, AiConversationDao aiConversationDao,
+                                  UserDao userDao) {
         this.aiProperties = aiProperties;
         this.seatunnelAgent = seatunnelAgent;
         this.engineChecker = engineChecker;
         this.projectService = projectService;
+        this.aiConversationDao = aiConversationDao;
+        this.userDao = userDao;
     }
 
     @Override
@@ -151,6 +173,111 @@ public class AiAssistantServiceImpl implements AiAssistantService {
             throw new ServiceException(Status.AI_ASSISTANT_BUSY);
         }
         return emitter;
+    }
+
+    @Override
+    public AiConversationVO queryConversation(User loginUser, long projectCode, long taskCode, String assistant) {
+        checkConversationAccess(loginUser, projectCode, assistant);
+        Optional<AiConversation> conversation = queryConversationOfProject(loginUser, projectCode, taskCode,
+                assistant);
+        if (!conversation.isPresent()) {
+            return new AiConversationVO(new ArrayList<>(), null, null);
+        }
+        List<AiConversationMessage> messages = JSONUtils.parseObject(conversation.get().getMessages(),
+                new TypeReference<List<AiConversationMessage>>() {
+                });
+        Integer updateUser = conversation.get().getUpdateUser();
+        User user = updateUser == null ? null : userDao.queryById(updateUser);
+        return new AiConversationVO(messages == null ? new ArrayList<>() : messages,
+                conversation.get().getUpdateTime(), user == null ? null : user.getUserName());
+    }
+
+    @Override
+    public void saveConversation(User loginUser, AiConversationRequest request) {
+        checkConversationAccess(loginUser, request.getProjectCode(), request.getAssistant());
+        queryConversationOfProject(loginUser, request.getProjectCode(), request.getTaskCode(),
+                request.getAssistant());
+        List<AiConversationMessage> messages = sanitize(loginUser, request.getMessages());
+        String json = JSONUtils.toJsonString(messages);
+        // Drop the oldest messages until the conversation fits
+        while (messages.size() > 1 && json.getBytes(StandardCharsets.UTF_8).length > MAX_CONVERSATION_BYTES) {
+            messages = messages.subList(1, messages.size());
+            json = JSONUtils.toJsonString(messages);
+        }
+        aiConversationDao.upsert(AiConversation.builder()
+                .taskCode(request.getTaskCode())
+                .projectCode(request.getProjectCode())
+                .assistant(request.getAssistant())
+                .messages(json)
+                .updateUser(loginUser.getId())
+                .build());
+    }
+
+    @Override
+    public void deleteConversation(User loginUser, long projectCode, long taskCode, String assistant) {
+        checkConversationAccess(loginUser, projectCode, assistant);
+        queryConversationOfProject(loginUser, projectCode, taskCode, assistant);
+        aiConversationDao.deleteByTaskCode(taskCode, assistant);
+        log.info("AI assistant conversation deleted, user: {}, project: {}, task: {}, assistant: {}",
+                loginUser.getUserName(), projectCode, taskCode, assistant);
+    }
+
+    private void checkConversationAccess(User loginUser, long projectCode, String assistant) {
+        if (!aiProperties.isEnabled()) {
+            throw new ServiceException(Status.AI_ASSISTANT_NOT_ENABLED);
+        }
+        if (!ASSISTANTS.contains(assistant)) {
+            throw new ServiceException(Status.REQUEST_PARAMS_NOT_VALID_ERROR, "assistant");
+        }
+        projectService.checkProjectAndAuthThrowException(loginUser, projectCode, WORKFLOW_UPDATE);
+    }
+
+    /**
+     * The conversation must belong to the project, so that the conversation of another project can not be read or
+     * overwritten with a task code.
+     */
+    private Optional<AiConversation> queryConversationOfProject(User loginUser, long projectCode, long taskCode,
+                                                                String assistant) {
+        Optional<AiConversation> conversation = aiConversationDao.queryByTaskCode(taskCode, assistant);
+        if (conversation.isPresent() && conversation.get().getProjectCode() != projectCode) {
+            throw new ServiceException(Status.USER_NO_OPERATION_PROJECT_PERM, loginUser.getUserName(),
+                    conversation.get().getProjectCode());
+        }
+        return conversation;
+    }
+
+    /**
+     * Keep the allowed fields only, redact the credentials, limit the number and the length of the messages.
+     */
+    private List<AiConversationMessage> sanitize(User loginUser, List<AiConversationMessage> messages) {
+        List<AiConversationMessage> result = new ArrayList<>();
+        if (messages == null) {
+            return result;
+        }
+        int from = Math.max(0, messages.size() - MAX_SAVED_MESSAGES);
+        for (AiConversationMessage message : messages.subList(from, messages.size())) {
+            if (message == null || !ROLES.contains(message.getRole())) {
+                continue;
+            }
+            AiConversationMessage saved = new AiConversationMessage();
+            saved.setRole(message.getRole());
+            String content = message.getContent() == null ? "" : message.getContent();
+            content = CredentialRedactor.mask(new CredentialRedactor().redactText(content));
+            saved.setContent(content.length() > MAX_MESSAGE_LENGTH ? content.substring(0, MAX_MESSAGE_LENGTH)
+                    : content);
+            saved.setTime(message.getTime());
+            if ("user".equals(message.getRole())) {
+                saved.setUserName(StringUtils.isBlank(message.getUserName()) ? loginUser.getUserName()
+                        : StringUtils.abbreviate(message.getUserName(), 128));
+            } else {
+                saved.setProposalState(StringUtils.abbreviate(message.getProposalState(), 16));
+                saved.setValid(message.getValid());
+                saved.setFixAttempts(message.getFixAttempts());
+                saved.setError(StringUtils.abbreviate(message.getError(), 1000));
+            }
+            result.add(saved);
+        }
+        return result;
     }
 
     /**

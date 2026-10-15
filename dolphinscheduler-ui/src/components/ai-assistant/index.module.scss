@@ -59,6 +59,12 @@
   }
 }
 
+.history-divider {
+  margin: 4px 0 12px !important;
+  font-size: 12px !important;
+  color: #8c8c8c;
+}
+
 .message {
   display: flex;
   margin-bottom: 12px;
@@ -73,7 +79,14 @@
   }
 
   &.user {
-    justify-content: flex-end;
+    flex-direction: column;
+    align-items: flex-end;
+
+    .sender {
+      margin-bottom: 2px;
+      color: #8c8c8c;
+      font-size: 12px;
+    }
 
     .bubble {
       background: #0098e1;

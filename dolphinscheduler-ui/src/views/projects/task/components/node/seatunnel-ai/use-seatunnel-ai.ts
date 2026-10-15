@@ -16,12 +16,28 @@
  */
 
 import { useAiSession } from '@/components/ai-assistant/use-ai-session'
+import {
+  deleteAiConversation,
+  getAiConversation,
+  saveAiConversation
+} from '@/service/modules/ai'
+import { useUserStore } from '@/store/user/user'
+import type { UserInfoRes } from '@/service/modules/users/types'
 import type { INodeData } from '../types'
 
 /**
- * The AI assistant session of a SeaTunnel task node: the config is generated or modified in the rawScript field.
+ * The AI assistant session of a SeaTunnel task node: the config is generated or modified in the rawScript field, the
+ * conversation is saved for the task and shared by its editors.
  */
-export function useSeatunnelAi(model: INodeData, projectCode: number) {
+export function useSeatunnelAi(
+  model: INodeData,
+  projectCode: number,
+  taskCode?: number
+) {
+  const userStore = useUserStore()
+  const query = taskCode
+    ? { projectCode, taskCode, assistant: 'seatunnel' }
+    : null
   return useAiSession({
     url: '/ai/seatunnel/chat',
     buildBody: (userInput, history) => ({
@@ -40,6 +56,14 @@ export function useSeatunnelAi(model: INodeData, projectCode: number) {
     setScript: (script: string) => {
       model.useCustom = true
       model.rawScript = script
-    }
+    },
+    userName: () => (userStore.getUserInfo as UserInfoRes)?.userName || '',
+    persistence: query
+      ? {
+          load: () => getAiConversation(query),
+          save: (messages) => saveAiConversation(query, messages),
+          clear: () => deleteAiConversation(query)
+        }
+      : undefined
   })
 }

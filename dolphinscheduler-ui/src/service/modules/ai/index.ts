@@ -16,11 +16,48 @@
  */
 
 import { axios } from '@/service/service'
-import type { AiStatus } from './types'
+import type {
+  AiConversation,
+  AiConversationQuery,
+  AiStatus,
+  SavedMessage
+} from './types'
 
 export function getAiStatus(): Promise<AiStatus> {
   return axios({
     url: '/ai/status',
     method: 'get'
   }) as unknown as Promise<AiStatus>
+}
+
+export function getAiConversation(
+  params: AiConversationQuery
+): Promise<AiConversation> {
+  return axios({
+    url: '/ai/conversations',
+    method: 'get',
+    params
+  }) as unknown as Promise<AiConversation>
+}
+
+export function saveAiConversation(
+  params: AiConversationQuery,
+  messages: SavedMessage[]
+): Promise<void> {
+  return axios({
+    url: '/ai/conversations',
+    method: 'put',
+    headers: { 'Content-Type': 'application/json' },
+    data: JSON.stringify({ ...params, messages })
+  }) as unknown as Promise<void>
+}
+
+export function deleteAiConversation(
+  params: AiConversationQuery
+): Promise<void> {
+  return axios({
+    url: '/ai/conversations',
+    method: 'delete',
+    params
+  }) as unknown as Promise<void>
 }

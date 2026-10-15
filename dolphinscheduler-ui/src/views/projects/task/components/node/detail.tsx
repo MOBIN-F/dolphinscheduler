@@ -90,8 +90,16 @@ const NodeDetail = defineComponent({
         !!aiStatus.value?.enabled &&
         !unref(readonly)
     )
-    const seatunnelAi = useSeatunnelAi(model, projectCode)
-    onBeforeUnmount(() => seatunnelAi.stop())
+    const seatunnelAi = useSeatunnelAi(model, projectCode, data.code)
+    // Load the saved conversation of the task once the assistant is shown
+    watch(
+      seatunnelAiEnabled,
+      (enabled) => {
+        if (enabled) seatunnelAi.load()
+      },
+      { immediate: true }
+    )
+    onBeforeUnmount(() => seatunnelAi.dispose())
 
     const renderAiChat = () => (
       <AiChatPanel

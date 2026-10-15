@@ -42,7 +42,12 @@ interface Proposal {
 /**
  * State of the proposal of an assistant message
  */
-type ProposalState = 'pending' | 'accepted' | 'rejected' | 'reverted'
+type ProposalState =
+  | 'pending'
+  | 'accepted'
+  | 'rejected'
+  | 'reverted'
+  | 'expired'
 
 interface ChatMessage {
   id: number
@@ -57,6 +62,20 @@ interface ChatMessage {
    * Excluded from the history after the user reverted the turn
    */
   reverted?: boolean
+  /**
+   * Loaded from the saved conversation, it has no proposal script and no checkpoint
+   */
+  restored?: boolean
+  /**
+   * The sender of a user message
+   */
+  userName?: string
+  time?: number
+  /**
+   * Validation summary of the proposal, kept for the saved conversation
+   */
+  valid?: boolean
+  fixAttempts?: number
   error?: string
   proposal?: Proposal
   proposalState?: ProposalState

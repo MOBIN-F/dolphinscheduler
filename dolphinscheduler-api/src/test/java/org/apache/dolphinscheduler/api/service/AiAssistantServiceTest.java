@@ -31,19 +31,28 @@ import org.apache.dolphinscheduler.ai.seatunnel.agent.SeatunnelProposal;
 import org.apache.dolphinscheduler.ai.seatunnel.validation.SeatunnelEngineChecker;
 import org.apache.dolphinscheduler.ai.seatunnel.validation.ValidationIssue;
 import org.apache.dolphinscheduler.ai.seatunnel.validation.ValidationResult;
+import org.apache.dolphinscheduler.api.dto.ai.AiConversationMessage;
+import org.apache.dolphinscheduler.api.dto.ai.AiConversationRequest;
+import org.apache.dolphinscheduler.api.dto.ai.AiConversationVO;
 import org.apache.dolphinscheduler.api.dto.ai.SeatunnelAiChatRequest;
 import org.apache.dolphinscheduler.api.enums.Status;
 import org.apache.dolphinscheduler.api.service.impl.AiAssistantServiceImpl;
+import org.apache.dolphinscheduler.common.utils.JSONUtils;
+import org.apache.dolphinscheduler.dao.entity.AiConversation;
 import org.apache.dolphinscheduler.dao.entity.User;
+import org.apache.dolphinscheduler.dao.repository.AiConversationDao;
+import org.apache.dolphinscheduler.dao.repository.UserDao;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -52,6 +61,8 @@ public class AiAssistantServiceTest {
     private final AiProperties properties = new AiProperties();
     private final SeatunnelConfigAgent agent = mock(SeatunnelConfigAgent.class);
     private final ProjectService projectService = mock(ProjectService.class);
+    private final AiConversationDao conversationDao = mock(AiConversationDao.class);
+    private final UserDao userDao = mock(UserDao.class);
     private AiAssistantServiceImpl service;
     private final User user = new User();
 
@@ -61,7 +72,8 @@ public class AiAssistantServiceTest {
         ObjectProvider<SeatunnelConfigAgent> agentProvider = mock(ObjectProvider.class);
         when(agentProvider.getIfAvailable()).thenReturn(agent);
         ObjectProvider<SeatunnelEngineChecker> checkerProvider = mock(ObjectProvider.class);
-        service = new AiAssistantServiceImpl(properties, agentProvider, checkerProvider, projectService);
+        service = new AiAssistantServiceImpl(properties, agentProvider, checkerProvider, projectService,
+                conversationDao, userDao);
         user.setId(1);
         user.setUserName("admin");
     }
@@ -125,6 +137,86 @@ public class AiAssistantServiceTest {
         Assertions.assertTrue(proposal.contains("\"valid\":true"), proposal);
         Assertions.assertTrue(proposal.contains("job.mode is not set"), proposal);
         Assertions.assertTrue(text(events.get(1)).contains("{\"text\":\"hello\"}"), text(events.get(1)));
+    }
+
+    private static AiConversationMessage message(String role, String content) {
+        AiConversationMessage message = new AiConversationMessage();
+        message.setRole(role);
+        message.setContent(content);
+        return message;
+    }
+
+    @Test
+    public void testConversationDisabledOrInvalidAssistant() {
+        assertThrowsServiceException(Status.AI_ASSISTANT_NOT_ENABLED,
+                () -> service.queryConversation(user, 100L, 1L, "seatunnel"));
+        properties.setEnabled(true);
+        assertThrowsServiceException(Status.REQUEST_PARAMS_NOT_VALID_ERROR,
+                () -> service.queryConversation(user, 100L, 1L, "unknown"));
+    }
+
+    @Test
+    public void testSaveConversationRedactsAndLimits() {
+        properties.setEnabled(true);
+        when(conversationDao.queryByTaskCode(1L, "seatunnel")).thenReturn(Optional.empty());
+        List<AiConversationMessage> messages = new ArrayList<>();
+        for (int i = 0; i < 210; i++) {
+            messages.add(message("assistant", "reply " + i));
+        }
+        messages.add(message("user", "密码是 S3cret!"));
+        messages.add(message("system", "ignored"));
+        AiConversationRequest request = new AiConversationRequest();
+        request.setProjectCode(100L);
+        request.setTaskCode(1L);
+        request.setAssistant("seatunnel");
+        request.setMessages(messages);
+
+        service.saveConversation(user, request);
+
+        verify(projectService).checkProjectAndAuthThrowException(eq(user), eq(100L), eq(WORKFLOW_UPDATE));
+        ArgumentCaptor<AiConversation> captor = ArgumentCaptor.forClass(AiConversation.class);
+        verify(conversationDao).upsert(captor.capture());
+        AiConversation saved = captor.getValue();
+        Assertions.assertEquals(1, saved.getUpdateUser());
+        Assertions.assertFalse(saved.getMessages().contains("S3cret!"), saved.getMessages());
+        Assertions.assertTrue(saved.getMessages().contains("******"), saved.getMessages());
+        Assertions.assertFalse(saved.getMessages().contains("ignored"), saved.getMessages());
+        List<?> savedMessages = JSONUtils.parseObject(saved.getMessages(), List.class);
+        Assertions.assertEquals(199, savedMessages.size());
+        Assertions.assertTrue(saved.getMessages().contains("\"userName\":\"admin\""), saved.getMessages());
+    }
+
+    @Test
+    public void testConversationOfAnotherProjectIsRejected() {
+        properties.setEnabled(true);
+        when(conversationDao.queryByTaskCode(1L, "seatunnel")).thenReturn(Optional.of(
+                AiConversation.builder().taskCode(1L).projectCode(999L).assistant("seatunnel").messages("[]")
+                        .build()));
+        assertThrowsServiceException(Status.USER_NO_OPERATION_PROJECT_PERM,
+                () -> service.queryConversation(user, 100L, 1L, "seatunnel"));
+        assertThrowsServiceException(Status.USER_NO_OPERATION_PROJECT_PERM,
+                () -> service.deleteConversation(user, 100L, 1L, "seatunnel"));
+    }
+
+    @Test
+    public void testQueryAndDeleteConversation() {
+        properties.setEnabled(true);
+        when(conversationDao.queryByTaskCode(1L, "seatunnel")).thenReturn(Optional.empty());
+        Assertions.assertTrue(service.queryConversation(user, 100L, 1L, "seatunnel").getMessages().isEmpty());
+
+        User other = new User();
+        other.setUserName("other");
+        when(userDao.queryById(2)).thenReturn(other);
+        when(conversationDao.queryByTaskCode(1L, "seatunnel")).thenReturn(Optional.of(
+                AiConversation.builder().taskCode(1L).projectCode(100L).assistant("seatunnel")
+                        .messages("[{\"role\":\"user\",\"content\":\"hi\",\"userName\":\"other\"}]")
+                        .updateUser(2).build()));
+        AiConversationVO conversation = service.queryConversation(user, 100L, 1L, "seatunnel");
+        Assertions.assertEquals(1, conversation.getMessages().size());
+        Assertions.assertEquals("other", conversation.getUpdateUserName());
+
+        service.deleteConversation(user, 100L, 1L, "seatunnel");
+        verify(conversationDao).deleteByTaskCode(1L, "seatunnel");
     }
 
     private static String text(SseEmitter.SseEventBuilder event) {
