@@ -669,6 +669,8 @@ export default {
     ai_status_http_sample: 'Calling the API to get the fields: {target}',
     ai_http_response: 'Raw response: {target} · HTTP {status} · {size}',
     ai_http_response_truncated: 'Only the first 20000 characters are shown.',
+    ai_readonly_placeholder: 'Read-only, messages can not be sent and the config can not be changed',
+    ai_readonly_empty: 'No AI conversation for this task',
     ai_http_response_note: 'The raw response is only shown in this conversation, it is not sent to the AI and not saved.',
     ai_proposal: 'Proposed change',
     ai_proposal_pending: 'Review the change on the right',

@@ -259,7 +259,7 @@ const NodeDetailModal = defineComponent({
         headerLinks={headerLinks}
         width={
           props.data.taskType === 'SEATUNNEL'
-            ? aiStatus.value?.enabled && !props.readonly
+            ? aiStatus.value?.enabled
               ? '95%'
               : '85%'
             : undefined

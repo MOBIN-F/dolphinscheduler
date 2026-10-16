@@ -84,13 +84,16 @@ const NodeDetail = defineComponent({
     // With the AI assistant: settings | AI chat | script editor (or the diff of the AI proposal)
     const { t } = useI18n()
     const aiStatus = useAiStatus()
+    // A read-only node, e.g. in a workflow instance, shows the same layout with the saved conversation only
     const seatunnelAiEnabled = computed(
-      () =>
-        model.taskType === 'SEATUNNEL' &&
-        !!aiStatus.value?.enabled &&
-        !unref(readonly)
+      () => model.taskType === 'SEATUNNEL' && !!aiStatus.value?.enabled
     )
-    const seatunnelAi = useSeatunnelAi(model, projectCode, data.code)
+    const seatunnelAi = useSeatunnelAi(
+      model,
+      projectCode,
+      data.code,
+      !!unref(readonly)
+    )
     // Load the saved conversation of the task once the assistant is shown
     watch(
       seatunnelAiEnabled,

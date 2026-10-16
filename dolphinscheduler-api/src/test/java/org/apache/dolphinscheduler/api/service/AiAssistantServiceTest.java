@@ -18,6 +18,7 @@
 package org.apache.dolphinscheduler.api.service;
 
 import static org.apache.dolphinscheduler.api.AssertionsHelper.assertThrowsServiceException;
+import static org.apache.dolphinscheduler.api.constants.ApiFuncIdentificationConstant.WORKFLOW_DEFINITION;
 import static org.apache.dolphinscheduler.api.constants.ApiFuncIdentificationConstant.WORKFLOW_UPDATE;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -217,6 +218,10 @@ public class AiAssistantServiceTest {
 
         service.deleteConversation(user, 100L, 1L, "seatunnel");
         verify(conversationDao).deleteByTaskCode(1L, "seatunnel");
+        // Reading only needs the view permission (read-only task view), deleting needs the edit permission
+        verify(projectService, times(2)).checkProjectAndAuthThrowException(eq(user), eq(100L),
+                eq(WORKFLOW_DEFINITION));
+        verify(projectService).checkProjectAndAuthThrowException(eq(user), eq(100L), eq(WORKFLOW_UPDATE));
     }
 
     private static String text(SseEmitter.SseEventBuilder event) {

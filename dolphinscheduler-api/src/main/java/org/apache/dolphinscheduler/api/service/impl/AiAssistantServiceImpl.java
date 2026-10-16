@@ -17,6 +17,7 @@
 
 package org.apache.dolphinscheduler.api.service.impl;
 
+import static org.apache.dolphinscheduler.api.constants.ApiFuncIdentificationConstant.WORKFLOW_DEFINITION;
 import static org.apache.dolphinscheduler.api.constants.ApiFuncIdentificationConstant.WORKFLOW_UPDATE;
 
 import org.apache.dolphinscheduler.ai.config.AiProperties;
@@ -178,7 +179,8 @@ public class AiAssistantServiceImpl implements AiAssistantService {
 
     @Override
     public AiConversationVO queryConversation(User loginUser, long projectCode, long taskCode, String assistant) {
-        checkConversationAccess(loginUser, projectCode, assistant);
+        // Also read when viewing a task, e.g. in a workflow instance
+        checkConversationAccess(loginUser, projectCode, assistant, WORKFLOW_DEFINITION);
         Optional<AiConversation> conversation = queryConversationOfProject(loginUser, projectCode, taskCode,
                 assistant);
         if (!conversation.isPresent()) {
@@ -195,7 +197,7 @@ public class AiAssistantServiceImpl implements AiAssistantService {
 
     @Override
     public void saveConversation(User loginUser, AiConversationRequest request) {
-        checkConversationAccess(loginUser, request.getProjectCode(), request.getAssistant());
+        checkConversationAccess(loginUser, request.getProjectCode(), request.getAssistant(), WORKFLOW_UPDATE);
         queryConversationOfProject(loginUser, request.getProjectCode(), request.getTaskCode(),
                 request.getAssistant());
         List<AiConversationMessage> messages = sanitize(loginUser, request.getMessages());
@@ -216,21 +218,21 @@ public class AiAssistantServiceImpl implements AiAssistantService {
 
     @Override
     public void deleteConversation(User loginUser, long projectCode, long taskCode, String assistant) {
-        checkConversationAccess(loginUser, projectCode, assistant);
+        checkConversationAccess(loginUser, projectCode, assistant, WORKFLOW_UPDATE);
         queryConversationOfProject(loginUser, projectCode, taskCode, assistant);
         aiConversationDao.deleteByTaskCode(taskCode, assistant);
         log.info("AI assistant conversation deleted, user: {}, project: {}, task: {}, assistant: {}",
                 loginUser.getUserName(), projectCode, taskCode, assistant);
     }
 
-    private void checkConversationAccess(User loginUser, long projectCode, String assistant) {
+    private void checkConversationAccess(User loginUser, long projectCode, String assistant, String permission) {
         if (!aiProperties.isEnabled()) {
             throw new ServiceException(Status.AI_ASSISTANT_NOT_ENABLED);
         }
         if (!ASSISTANTS.contains(assistant)) {
             throw new ServiceException(Status.REQUEST_PARAMS_NOT_VALID_ERROR, "assistant");
         }
-        projectService.checkProjectAndAuthThrowException(loginUser, projectCode, WORKFLOW_UPDATE);
+        projectService.checkProjectAndAuthThrowException(loginUser, projectCode, permission);
     }
 
     /**

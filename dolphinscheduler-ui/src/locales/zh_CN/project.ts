@@ -650,6 +650,8 @@ export default {
     ai_status_http_sample: '调用接口获取字段 {target}',
     ai_http_response: '响应原文：{target} · HTTP {status} · {size}',
     ai_http_response_truncated: '仅显示前 20000 个字符。',
+    ai_readonly_placeholder: '只读查看，不能发送消息或修改配置',
+    ai_readonly_empty: '该任务暂无 AI 对话记录',
     ai_http_response_note: '响应原文只在本次对话中显示，不发送给 AI，也不保存。',
     ai_proposal: 'AI 建议的修改',
     ai_proposal_pending: '请在右侧确认修改',

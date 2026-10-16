@@ -333,41 +333,48 @@ export default defineComponent({
     return () => {
       const { state } = props.session
       const pending = state.pendingMessageId !== null
+      const readonly = state.readonly
       return (
         <div class={styles['chat-panel']} style={{ height: props.height }}>
           <div class={styles['chat-header']}>
             <span class={styles['chat-title']}>
               {props.title || t('project.node.ai_assistant')}
             </span>
-            <NPopconfirm onPositiveClick={clear}>
-              {{
-                default: () => t('project.node.ai_clear_confirm'),
-                trigger: () => (
-                  <NButton
-                    text
-                    size='small'
-                    loading={clearing.value}
-                    disabled={
-                      state.sending || state.loading || !state.messages.length
-                    }
-                  >
-                    {{
-                      icon: () => (
-                        <NIcon>
-                          <DeleteOutlined />
-                        </NIcon>
-                      ),
-                      default: () => t('project.node.ai_clear_history')
-                    }}
-                  </NButton>
-                )
-              }}
-            </NPopconfirm>
+            {!readonly && (
+              <NPopconfirm onPositiveClick={clear}>
+                {{
+                  default: () => t('project.node.ai_clear_confirm'),
+                  trigger: () => (
+                    <NButton
+                      text
+                      size='small'
+                      loading={clearing.value}
+                      disabled={
+                        state.sending || state.loading || !state.messages.length
+                      }
+                    >
+                      {{
+                        icon: () => (
+                          <NIcon>
+                            <DeleteOutlined />
+                          </NIcon>
+                        ),
+                        default: () => t('project.node.ai_clear_history')
+                      }}
+                    </NButton>
+                  )
+                }}
+              </NPopconfirm>
+            )}
           </div>
           <div class={styles['chat-messages']} ref={list}>
             {state.loading ? (
               <div class={styles.welcome}>
                 <NSpin size='small' />
+              </div>
+            ) : state.messages.length === 0 && readonly ? (
+              <div class={styles.welcome}>
+                <p>{t('project.node.ai_readonly_empty')}</p>
               </div>
             ) : state.messages.length === 0 ? (
               <div class={styles.welcome}>
@@ -386,7 +393,7 @@ export default defineComponent({
             )}
           </div>
           <div class={styles['chat-input']}>
-            {pending && (
+            {pending && !readonly && (
               <div class={styles.hint}>{t('project.node.ai_pending_hint')}</div>
             )}
             <NInput
@@ -396,26 +403,30 @@ export default defineComponent({
               onKeydown={onKeydown}
               autosize={{ minRows: 2, maxRows: 6 }}
               placeholder={
-                props.placeholder || t('project.node.ai_placeholder')
+                readonly
+                  ? t('project.node.ai_readonly_placeholder')
+                  : props.placeholder || t('project.node.ai_placeholder')
               }
-              disabled={pending || state.loading}
+              disabled={readonly || pending || state.loading}
             />
-            <div class={styles['chat-actions']}>
-              {state.sending ? (
-                <NButton size='small' onClick={() => props.session.stop()}>
-                  {t('project.node.ai_stop')}
-                </NButton>
-              ) : (
-                <NButton
-                  size='small'
-                  type='primary'
-                  disabled={pending || !input.value.trim()}
-                  onClick={send}
-                >
-                  {t('project.node.ai_send')}
-                </NButton>
-              )}
-            </div>
+            {!readonly && (
+              <div class={styles['chat-actions']}>
+                {state.sending ? (
+                  <NButton size='small' onClick={() => props.session.stop()}>
+                    {t('project.node.ai_stop')}
+                  </NButton>
+                ) : (
+                  <NButton
+                    size='small'
+                    type='primary'
+                    disabled={pending || !input.value.trim()}
+                    onClick={send}
+                  >
+                    {t('project.node.ai_send')}
+                  </NButton>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )

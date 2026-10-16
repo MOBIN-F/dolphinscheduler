@@ -25,7 +25,7 @@
 
 | 功能 | 说明 |
 |---|---|
-| 三栏布局 | 左：节点配置；中：AI 对话；右：脚本编辑器 / 修改对比。未启用 AI 时保持原来的两栏布局 |
+| 三栏布局 | 左：节点配置；中：AI 对话；右：脚本编辑器 / 修改对比。只读查看（如工作流实例的“当前节点设置”）也是三栏，只显示该任务的历史对话，不能发消息、不能清空。未启用 AI 时保持原来的两栏布局 |
 | 生成与多轮修改 | 第一次描述需求生成完整配置，之后可以继续说"改成流式""并行度改成 4"等，AI 在当前脚本基础上修改 |
 | 基于真实参数生成 | AI 写配置前会查询所用 connector 的参数（来自 SeaTunnel 2.3.13 导出的元数据），不靠模型记忆，减少编造参数 |
 | 调用接口获取字段 | 配置 Http source 时，AI 会用你给出的接口地址实际调用一次，根据返回的 JSON / text 推断字段和类型，生成 `schema` 和 `content_field`，不靠猜（见 2.1） |
@@ -46,7 +46,7 @@
 
 ## 二、使用说明
 
-1. 打开工作流定义，新建或编辑一个 **SeaTunnel** 任务节点，弹窗显示为三栏（工作流实例里的只读查看不显示 AI）。
+1. 打开工作流定义，新建或编辑一个 **SeaTunnel** 任务节点，弹窗显示为三栏。在工作流实例里查看节点时同样是三栏，但只能查看历史对话。
 2. 在中间对话框描述需求，例如：
    - "把 MySQL（10.0.0.5:3306，库 shop，用户 etl，密码是 xxx）的 orders 表全量同步到 ClickHouse 的 dw.orders"
    - "实时消费 Kafka 的 events 主题（JSON 格式），写入 ClickHouse"
@@ -98,59 +98,20 @@ AI 会先调用该接口（进度里显示“调用接口获取字段 GET https:
 | AWS Bedrock | us-east-1 已开通 Claude Sonnet 5.5 和 Claude Haiku 5.5；api-server 有调用权限（见 3.3） |
 | 数据库 | 需要执行一条建表 SQL（MySQL 或 PostgreSQL） |
 
-### 3.2 部署步骤（只改 api-server，master / worker / alert 不用动）
+### 3.2 部署步骤
 
-部署包 `ds-ai-full-deploy-3.4.2.tar.gz`（包含全部 AI 功能：配置生成、聊天记录、Http 接口字段推断；脚本和 SQL 也在仓库 `dolphinscheduler-ai/tools/deploy/` 下）：
+只改 api-server，master / worker / alert 不用动。部署包 `ds-ai-deploy-3.4.2.tar.gz` 包含全部 AI 功能，使用其中的 `install.sh`（预检查 → 备份 → 安装 → 校验，失败自动还原）和 `rollback.sh`。
 
-| 内容 | 说明 |
-|---|---|
-| `api-server-libs/`（39 个 jar） | 新增 22 个第三方 jar（LangChain4j、Bedrock SDK、AWS CRT 等）+ 升级 14 个 AWS SDK jar（2.17.282 → 2.42.4）+ `dolphinscheduler-ai / api / dao-3.4.2.jar` |
-| `remove-from-api-server-libs.txt` | 要删除的 14 个旧版 AWS SDK jar |
-| `ui/` | 新前端 |
-| `ai_conversation_mysql.sql` / `ai_conversation_postgresql.sql` | 聊天记录表 `t_ds_ai_conversation` |
-| `install-api-server.sh` | 安装脚本：备份 libs 和 ui → 删除旧 jar → 拷入新 jar → 替换 ui |
-| `application-ai.yaml` | 配置片段 |
-| `seatunnel-metadata-exporter/` | connector 元数据导出工具（见“五”） |
-
-**部署步骤：**
+完整步骤、验证和回滚见 [`tools/deploy/DEPLOY.md`](tools/deploy/DEPLOY.md)，简要流程：
 
 ```bash
-# 1. 建表（二选一，表已存在时会跳过）
-mysql -h <host> -u <user> -p <database> < ds-ai-full-deploy/ai_conversation_mysql.sql
-psql -h <host> -U <user> -d <database> -f ds-ai-full-deploy/ai_conversation_postgresql.sql
-
-# 2. 停止 api-server
+tar -xzf ds-ai-deploy-3.4.2.tar.gz && cd ds-ai-deploy
+./install.sh /opt/dolphinscheduler-3.4.2 --seatunnel-home /opt/seatunnel-2.3.13 --dry-run   # 预检查
+# 手动执行 ai_conversation_mysql.sql（或 PostgreSQL 版本）建表，脚本不操作数据库
 /opt/dolphinscheduler-3.4.2/bin/dolphinscheduler-daemon.sh stop api-server
-
-# 3. 安装 jar 和 ui
-tar -xzf ds-ai-full-deploy-3.4.2.tar.gz && cd ds-ai-full-deploy
-./install-api-server.sh /opt/dolphinscheduler-3.4.2
-
-# 4. 配置：把 application-ai.yaml 的内容追加到 api-server/conf/application.yaml 顶层（与 security: 同级），
-#    修改 ai.seatunnel.home 为实际的 SeaTunnel 安装目录
-
-# 5. 给 api-server 所在 EC2 的实例角色加 Bedrock 权限（见 3.4）
-
-# 6. 启动 api-server
+./install.sh /opt/dolphinscheduler-3.4.2 --seatunnel-home /opt/seatunnel-2.3.13
 /opt/dolphinscheduler-3.4.2/bin/dolphinscheduler-daemon.sh start api-server
 ```
-
-**已部署过 AI 助手主体（未含聊天记录和 Http 接口字段推断）时的升级：** 使用 `ds-ai-update-deploy-3.4.2.tar.gz`（只含 ai / api / dao 三个 jar、ui、建表 SQL 和 `install-ai-update.sh`，第三方 jar 不变）：
-
-```bash
-tar -xzf ds-ai-update-deploy-3.4.2.tar.gz && cd ds-ai-update-deploy
-mysql -h <host> -u <user> -p <database> < ai_conversation_mysql.sql   # 或 psql ... -f ai_conversation_postgresql.sql
-/opt/dolphinscheduler-3.4.2/bin/dolphinscheduler-daemon.sh stop api-server
-./install-ai-update.sh /opt/dolphinscheduler-3.4.2                    # 备份到 api-server/backup-<时间>
-/opt/dolphinscheduler-3.4.2/bin/dolphinscheduler-daemon.sh start api-server
-```
-
-注意：
-- **旧版 AWS SDK jar 必须删除**（脚本已处理）。jar 文件名带版本号，同一个包的 2.17.282 和 2.42.4 同时在 classpath 上会冲突。`datasync-2.17.282.jar` 和 `netty-nio-client-2.17.282.jar` 是正常保留的。
-- 前端读取的是 **`api-server/ui`**，不是 DolphinScheduler 根目录下的 `ui`。
-- 替换后用新开的无痕窗口验证，避免浏览器缓存旧前端（入口文件应为 `assets/index.209cb49d.js`）。
-
-**回滚：** 停止 api-server，用脚本输出的备份目录（`api-server/libs.bak-*`、`api-server/ui.bak-*`）恢复，再启动；或把 `ai.enabled` 改为 `false` 后重启（页面恢复原样，AI 相关组件都不会创建）。
 
 ### 3.3 配置项（`api-server/conf/application.yaml`）
 
@@ -271,7 +232,7 @@ dolphinscheduler-ai/tools/seatunnel-metadata-exporter/export.sh /opt/seatunnel-2
 | 发送消息报 `AuthenticationException ... not authorized to perform: bedrock:InvokeModelWithResponseStream` | api-server 使用的身份（日志里的 `assumed-role/...`）没有 Bedrock 权限，按 3.4 配置 |
 | 校验结果显示"引擎校验：未执行" | 未配置 `ai.seatunnel.home`、路径下没有 `starter/seatunnel-starter.jar`，或 api-server 运行在 JRE 上；鼠标悬停可看原因 |
 | AI 说某个 connector 未安装 | 该 connector 不在元数据里，按"五"重新导出 |
-| 页面没有三栏 | `ai.enabled` 未开启；或是工作流实例的只读查看；或浏览器缓存了旧前端（用无痕窗口验证） |
+| 页面没有三栏 | `ai.enabled` 未开启；或浏览器缓存了旧前端（用无痕窗口验证） |
 | AI 说接口地址“不是用户给出的” | 对话里没有写出完整的 `http(s)://host:端口`，或 AI 拼出的地址和你写的不一致；请在对话中给出完整 URL |
 | 调用接口报 `unknown host` / 超时 | api-server 无法访问该地址；接口地址需要 api-server 和 worker 都能访问 |
 | 提示"AI 助手请求过于频繁" | 超过每分钟请求上限，调整 `rate-limit-per-user-per-minute` |

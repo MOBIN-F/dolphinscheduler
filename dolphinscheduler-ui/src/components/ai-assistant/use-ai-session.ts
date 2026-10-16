@@ -41,6 +41,10 @@ export interface AiSessionOptions {
    * Saves the conversation, e.g. on the server for the task, when set
    */
   persistence?: AiSessionPersistence
+  /**
+   * Only shows the saved conversation, e.g. when viewing a task: nothing is sent, saved or cleared
+   */
+  readonly?: boolean
 }
 
 export interface AiSessionPersistence {
@@ -68,6 +72,7 @@ export function useAiSession(options: AiSessionOptions) {
     pendingMessageId: null as number | null,
     // Loading the saved conversation, sending is disabled meanwhile
     loading: !!options.persistence,
+    readonly: !!options.readonly,
     // Info of the saved conversation shown above the restored messages
     restoredUpdateTime: null as string | null,
     restoredUpdateUserName: null as string | null
@@ -119,7 +124,7 @@ export function useAiSession(options: AiSessionOptions) {
   const save = async () => {
     if (saveTimer) clearTimeout(saveTimer)
     saveTimer = null
-    if (!options.persistence || state.loading) return
+    if (!options.persistence || state.loading || options.readonly) return
     try {
       await options.persistence.save(toSaved())
     } catch (e) {
@@ -170,6 +175,7 @@ export function useAiSession(options: AiSessionOptions) {
     const userInput = input.trim()
     if (
       !userInput ||
+      options.readonly ||
       state.sending ||
       state.loading ||
       state.pendingMessageId !== null
@@ -301,6 +307,7 @@ export function useAiSession(options: AiSessionOptions) {
    * Clear the conversation, the saved conversation is deleted as well.
    */
   const clear = async () => {
+    if (options.readonly) return
     stop()
     if (saveTimer) clearTimeout(saveTimer)
     saveTimer = null

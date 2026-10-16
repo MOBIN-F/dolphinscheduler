@@ -27,12 +27,13 @@ import type { INodeData } from '../types'
 
 /**
  * The AI assistant session of a SeaTunnel task node: the config is generated or modified in the rawScript field, the
- * conversation is saved for the task and shared by its editors.
+ * conversation is saved for the task and shared by its editors. A read-only node only shows the saved conversation.
  */
 export function useSeatunnelAi(
   model: INodeData,
   projectCode: number,
-  taskCode?: number
+  taskCode?: number,
+  readonly = false
 ) {
   const userStore = useUserStore()
   const query = taskCode
@@ -58,6 +59,7 @@ export function useSeatunnelAi(
       model.rawScript = script
     },
     userName: () => (userStore.getUserInfo as UserInfoRes)?.userName || '',
+    readonly,
     persistence: query
       ? {
           load: () => getAiConversation(query),
