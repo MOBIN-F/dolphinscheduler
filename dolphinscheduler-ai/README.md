@@ -33,6 +33,7 @@
 | 对比确认 | 右侧显示"原脚本 vs 建议脚本"的 diff 和校验结果；可直接在建议一侧修改后再接受；支持合并 / 并排视图 |
 | 回撤 / 重做 | 每次接受都是一个检查点，可以"回撤到此前"恢复，也可以"重做" |
 | 聊天记录保存 | 按任务保存到数据库，该任务的所有编辑者共享；重新打开节点能看到之前的对话并接着聊；可一键清空 |
+| 预置连接（SeaTunnel 配置） | 管理员在安全中心维护 Kafka / MySQL / PostgreSQL / ClickHouse / HTTP / S3 连接并按用户授权；AI 助手顶部选择来源和目标后，自动读取 Kafka 消息样例或表结构，AI 不再追问连接信息，并按字段对齐生成配置；脚本里的密码是 `${stconn.标识.字段}` 引用，运行时注入（见 2.2） |
 | 凭据保护 | 发给 AI 之前把密码、密钥、token 替换成占位符，只在最终脚本里还原；对话和数据库里显示为 `******` |
 | 权限与限流 | 需要项目的工作流编辑权限；每个用户每分钟最多 10 次请求（可配置） |
 
@@ -52,7 +53,7 @@
    - "实时消费 Kafka 的 events 主题（JSON 格式），写入 ClickHouse"
 
    按 Enter 发送，Shift+Enter 换行；生成过程中可点"停止"。缺少必要信息时 AI 会先反问。
-3. 回复下方会显示进度：查询参数 → 本地校验 → 引擎校验 →（必要时）自动修复。
+3. 回复上方会显示完整的调用过程，每一步都带结果和耗时，例如：“使用已选来源 kafka_dev / orders — 字段 7 个（来自选择栏）”“读取字段 … — 字段 7 个，其中敏感 2 个”“本地校验 — 通过，1 条警告”。失败的步骤显示 ✗ 和原因，警告显示 ⚠，点击步骤可以查看细节（字段列表、校验问题等）。生成结束后自动折叠成一行“N 个步骤 · 用时 …”，点击可以展开；重新打开节点后，历史消息中仍能看到当时的调用过程。
 4. 生成完成后右侧变为对比视图，顶部显示校验结果（鼠标悬停看具体问题）：
    - **接受**：写入编辑器（可先在右侧手动调整）；
    - **拒绝**：丢弃本次修改。
@@ -86,6 +87,62 @@ AI 会先调用该接口（进度里显示“调用接口获取字段 GET https:
 - 历史消息只显示当时的结果（已接受 / 已拒绝 / 已回撤 / 已过期），不能回撤或重做。关闭弹窗时还没确认的修改会显示"已过期（未确认）"。
 - 对话面板右上角"清空聊天记录"会删除该任务的全部对话（所有编辑者都看不到），需要二次确认，不影响编辑器里的脚本。
 
+### 2.2 预置连接（SeaTunnel 配置）
+
+**管理员：维护连接**
+
+1. 安全中心 → **SeaTunnel配置** → 创建连接，选择类型并填写：
+
+   | 类型 | 主要字段 | 可作为 |
+   |---|---|---|
+   | Kafka | bootstrap servers；**消费者组前缀**（集群按前缀授权消费者组时填写）；安全协议 PLAINTEXT / SASL_PLAINTEXT / SASL_SSL / SSL；SASL 机制、用户名、密码；SSL 的 CA 证书、客户端证书和私钥（PEM 文本，直接粘贴） | 来源、目标 |
+   | MySQL / PostgreSQL | 主机、端口、数据库、用户名、密码、JDBC 参数 | 来源、目标 |
+   | ClickHouse | 主机、HTTP 端口、默认数据库、用户名、密码 | 来源、目标 |
+   | HTTP | 基础地址、认证方式（无 / Bearer / Basic）、公共请求头、常用接口路径 | 来源 |
+   | S3 | 区域、Endpoint、Bucket、认证方式（实例角色 / AK·SK） | 目标 |
+
+   - **连接标识**（如 `kafka_prod`）会出现在脚本里，创建后不能修改。
+   - 密码、证书等敏感字段只能写入、不能读出：编辑时显示“已设置”，留空表示不修改。数据库中用 AES 加密保存（密钥见 DEPLOY.md 第四节第 3 步）。
+   - 点“测试连接”，在保存前验证。
+   - 被任务引用的连接不能删除。
+   - **消费者组前缀**：集群只允许特定前缀的消费者组时填写，例如 `team-a`。填写后：
+     - 作业的 `consumer.group` 固定为 `<前缀>-ds-<任务code>`（例如 `team-a-ds-123456789`）。按任务区分且不随任务改名而变化，所以改名后不会从头重新消费。不经过任务调用时，由 AI 在前缀后补一个后缀；
+     - **不允许直接用前缀作为消费者组**，校验不通过会自动修复；
+     - AI 读取样例时使用 `<前缀>-dolphinscheduler-ai-sample`。读取样例不提交 offset，不影响任何消费进度；
+     - 需要在 Kafka 上给该账号授予这个前缀的消费者组 Read 权限（前缀匹配）。
+2. 用户管理 → 授权 → **SeaTunnel连接**，把连接授权给需要的用户。管理员不需要授权，能使用全部连接。
+
+**用户：在 AI 助手中选择**
+
+1. 打开 SeaTunnel 节点，对话框顶部有“数据来源 / 写入目标”，点开选择：
+   - 来源：选连接，再选 topic，或者选库 / schema 后再选表，可以多选；HTTP 选接口路径。
+   - 目标：选连接，再选已有的表，或者勾选“**自动新建表**”并填新表名；S3 选目录和文件格式。
+2. 选好后，会自动读取字段：Kafka 消费最近 5 条消息推断字段，数据库读取表结构，HTTP 调用一次接口。读完显示“字段 N 个”，点开可以查看字段和数据样例。**数据样例只显示在当前页面，不发给 AI，也不保存。**
+3. 直接说需求，例如“把选中的 topic 同步到选中的表”。AI 不会再问地址和账号：
+   - 来源和目标的字段按名称和类型对齐，名称不同时用 `Sql` / `FieldMapper` 转换，类型不同时用 `CAST`，没有对应的字段会在说明里列出；
+   - 自动新建表时，以来源的结构为准，生成 `schema_save_mode = "CREATE_SCHEMA_WHEN_NOT_EXIST"`；
+   - 脚本里的密码为 `"${stconn.kafka_prod.sasl_password}"` 这样的引用。编辑器和任务定义中都没有明文，任务运行时由 master 替换成真实值。worker 的服务日志会把它显示为 `******`。
+4. 选择结果和聊天记录一起按任务保存。手动修改选择后，对话中会插入一条“来源已改为 …”的记录。
+5. 不选择连接也照常可用，像以前一样在对话中描述连接信息即可。
+
+**AI 主动读取字段（尽量不让用户提供样例）**
+
+- **下拉框可以直接输入**：topic、库 / schema、表都能直接输入名称后回车。账号没有 List 权限、列表为空时也能用，读取样例只需要该 topic / 表本身的读权限。
+- **只选了一部分，或者没用选择栏**：在对话里说“把 kafka_dev 的 orders 同步到 pg_dw 的 public.orders_sink”即可。AI 会自己查找你有权限的连接，消费样例、读取表结构，并使用 `${stconn...}` 引用。
+- **对话里直接给出连接信息**：例如 Kafka 地址和账号，或数据库的主机、库、用户、密码。AI 用这些信息临时连接取样：
+  - 密码在发给 AI 前就被替换成占位符，只在服务端连接时还原；
+  - 只连接你在对话里写出的主机，本机、云元数据地址一律禁止；
+  - 每次对话最多取样 6 次。
+- **失败时说明原因**：只有全部尝试都失败，AI 才会请你补充，并说明具体原因，例如没有读权限、topic 里没有消息、安全协议应为 SASL_SSL、连接超时。
+
+**样例中的个人信息**
+
+- 手机号、邮箱、身份证号、银行卡号、IP、姓名、年龄、地址、生日等字段会被识别为敏感字段。识别方式有两种：按字段名，如 `phone`、`buyerPhone`、`id_card`、`age`；按值的格式，即使字段名叫 `contact` 也能识别出手机号。
+- 发给 AI 的只有格式描述，例如“手机号”“年龄（值已隐藏）”，不发送任何真实字符。
+- 页面上的数据样例部分遮掩显示，例如 `138****5678`、`张**`、`"age":"**"`。
+- 作业实际同步的数据不受影响，脱敏只作用于给 AI 和页面看的样例。
+- 需要追加关键字时，配置 `ai.sensitive.field-keywords`。
+
 ## 三、部署说明
 
 ### 3.1 前置条件
@@ -100,17 +157,18 @@ AI 会先调用该接口（进度里显示“调用接口获取字段 GET https:
 
 ### 3.2 部署步骤
 
-只改 api-server，master / worker / alert 不用动。部署包 `ds-ai-deploy-3.4.2.tar.gz` 包含全部 AI 功能，使用其中的 `install.sh`（预检查 → 备份 → 安装 → 校验，失败自动还原）和 `rollback.sh`。
+本次需要升级 **api-server、master-server、worker-server**，alert-server 不变。部署包 `ds-ai-deploy-3.4.2.tar.gz` 中的 `install.sh` 会依次做预检查、备份、安装和校验，任一步失败自动还原；`rollback.sh` 用于回滚。脚本不操作数据库，建表 SQL 由 DBA 手动执行。
 
-完整步骤、验证和回滚见 [`tools/deploy/DEPLOY.md`](tools/deploy/DEPLOY.md)，简要流程：
+完整步骤见 [`tools/deploy/DEPLOY.md`](tools/deploy/DEPLOY.md)，简要流程：
 
 ```bash
 tar -xzf ds-ai-deploy-3.4.2.tar.gz && cd ds-ai-deploy
 ./install.sh /opt/dolphinscheduler-3.4.2 --seatunnel-home /opt/seatunnel-2.3.13 --dry-run   # 预检查
-# 手动执行 ai_conversation_mysql.sql（或 PostgreSQL 版本）建表，脚本不操作数据库
-/opt/dolphinscheduler-3.4.2/bin/dolphinscheduler-daemon.sh stop api-server
+# DBA 手动执行 ai_tables_mysql.sql（或 PostgreSQL 版本）
+# api-server 和每台 master 的 conf/common.properties 中设置相同的 seatunnel.connection.encryption.key
+# 停止 api-server / master-server / worker-server
 ./install.sh /opt/dolphinscheduler-3.4.2 --seatunnel-home /opt/seatunnel-2.3.13
-/opt/dolphinscheduler-3.4.2/bin/dolphinscheduler-daemon.sh start api-server
+# 启动 master-server / worker-server / api-server
 ```
 
 ### 3.3 配置项（`api-server/conf/application.yaml`）
@@ -201,6 +259,9 @@ aws bedrock-runtime converse-stream --region us-east-1 \
 | `GET /ai/conversations?projectCode=&taskCode=` | 读取任务的聊天记录 |
 | `PUT /ai/conversations` | 保存聊天记录（整份覆盖） |
 | `DELETE /ai/conversations?projectCode=&taskCode=` | 清空聊天记录 |
+| `GET/POST/PUT/DELETE /seatunnel-connections` | 连接管理（管理员）；`GET /types` 表单定义，`POST /test` 测试，`POST /grant` 授权 |
+| `GET /seatunnel-connections/{key}/objects?parent=` | 浏览 topic / 库 / 表 / 目录 / 接口 |
+| `POST /seatunnel-connections/{key}/describe?object=` | 读取字段（含只给用户看的数据样例） |
 
 关键设计：
 - **Agent 框架**：LangChain4j 1.22（只用模型调用、工具调用、流式、监听器），流程编排自研，借鉴 SeaTunnel dev 分支 `seatunnel-cli` 的思路。

@@ -33,6 +33,7 @@ import org.apache.dolphinscheduler.api.exceptions.ServiceException;
 import org.apache.dolphinscheduler.api.service.impl.LoggerServiceImpl;
 import org.apache.dolphinscheduler.api.service.impl.ProjectServiceImpl;
 import org.apache.dolphinscheduler.api.service.impl.WorkflowInstanceServiceImpl;
+import org.apache.dolphinscheduler.api.service.seatunnel.SeatunnelConnectionService;
 import org.apache.dolphinscheduler.api.utils.Result;
 import org.apache.dolphinscheduler.common.constants.Constants;
 import org.apache.dolphinscheduler.common.enums.CommandType;
@@ -101,6 +102,10 @@ import com.google.common.collect.Lists;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 public class WorkflowInstanceServiceTest {
+
+    @Mock
+
+    private SeatunnelConnectionService seatunnelConnectionService;
 
     @InjectMocks
     WorkflowInstanceServiceImpl workflowInstanceService;

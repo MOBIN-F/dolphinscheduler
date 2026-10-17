@@ -45,6 +45,10 @@ public class AiProperties {
 
     private final HttpSample httpSample = new HttpSample();
 
+    private final Connection connection = new Connection();
+
+    private final Sensitive sensitive = new Sensitive();
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -71,6 +75,14 @@ public class AiProperties {
 
     public HttpSample getHttpSample() {
         return httpSample;
+    }
+
+    public Connection getConnection() {
+        return connection;
+    }
+
+    public Sensitive getSensitive() {
+        return sensitive;
     }
 
     /**
@@ -287,6 +299,44 @@ public class AiProperties {
 
         public void setDeniedHosts(List<String> deniedHosts) {
             this.deniedHosts = deniedHosts;
+        }
+    }
+
+    /**
+     * Settings of the SeaTunnel connections maintained in the security center.
+     */
+    public static class Connection {
+
+        /**
+         * Timeout to connect, list the objects and sample the data of a connection.
+         */
+        private Duration timeout = Duration.ofSeconds(10);
+
+        public Duration getTimeout() {
+            return timeout;
+        }
+
+        public void setTimeout(Duration timeout) {
+            this.timeout = timeout;
+        }
+    }
+
+    /**
+     * Personal data in the sampled messages and responses: the LLM only gets the format, the user sees it masked.
+     */
+    public static class Sensitive {
+
+        /**
+         * Field name keywords in addition to the built-in ones (phone, email, id_card, name, age, address, ...).
+         */
+        private List<String> fieldKeywords = new ArrayList<>();
+
+        public List<String> getFieldKeywords() {
+            return fieldKeywords;
+        }
+
+        public void setFieldKeywords(List<String> fieldKeywords) {
+            this.fieldKeywords = fieldKeywords;
         }
     }
 }

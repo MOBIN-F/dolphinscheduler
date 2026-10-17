@@ -28,6 +28,7 @@ import org.apache.dolphinscheduler.api.permission.PermissionCheck;
 import org.apache.dolphinscheduler.api.service.ProjectService;
 import org.apache.dolphinscheduler.api.service.TaskDefinitionService;
 import org.apache.dolphinscheduler.api.service.WorkflowTaskRelationService;
+import org.apache.dolphinscheduler.api.service.seatunnel.SeatunnelConnectionService;
 import org.apache.dolphinscheduler.api.utils.PageInfo;
 import org.apache.dolphinscheduler.api.utils.Result;
 import org.apache.dolphinscheduler.api.vo.TaskDefinitionVO;
@@ -86,6 +87,12 @@ import com.google.common.collect.Lists;
 @Service
 @Slf4j
 public class TaskDefinitionServiceImpl extends BaseServiceImpl implements TaskDefinitionService {
+
+    /**
+     * Checks the SeaTunnel connections referenced by the SeaTunnel tasks.
+     */
+    @Autowired
+    private SeatunnelConnectionService seatunnelConnectionService;
 
     @Autowired
     private ProjectDao projectDao;
@@ -237,6 +244,7 @@ public class TaskDefinitionServiceImpl extends BaseServiceImpl implements TaskDe
         if (!checkTaskParameters(taskDefinitionToUpdate.getTaskType(), taskDefinitionToUpdate.getTaskParams())) {
             throw new ServiceException(Status.WORKFLOW_NODE_S_PARAMETER_INVALID, taskDefinitionToUpdate.getName());
         }
+        seatunnelConnectionService.checkReferences(loginUser, Collections.singletonList(taskDefinitionToUpdate));
         Integer version = taskDefinitionLogMapper.queryMaxVersionForDefinition(taskCode);
         if (version == null || version == 0) {
             log.error("Max version task definitionLog can not be found in database, taskDefinitionCode:{}.",

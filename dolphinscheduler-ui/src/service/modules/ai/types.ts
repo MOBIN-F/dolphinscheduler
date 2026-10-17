@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+import type { ObjectDescription } from '@/service/modules/seatunnel-connections/types'
+
 interface AiStatus {
   enabled: boolean
   seatunnelEngineValidation: boolean
@@ -35,16 +37,55 @@ interface SavedMessage {
   content: string
   userName?: string
   time?: number
+  /**
+   * A note of a user action, e.g. the selected source was changed
+   */
+  note?: boolean
+  /**
+   * The progress steps, without the details
+   */
+  steps?: {
+    kind: string
+    state: string
+    args?: Record<string, any>
+    result?: Record<string, any>
+    millis?: number
+  }[]
   proposalState?: string
   valid?: boolean
   fixAttempts?: number
   error?: string
 }
 
+/**
+ * The connection selected for the source or the sink, without the raw samples
+ */
+interface ConnectionSelectionReq {
+  connectionKey: string
+  objects: string[]
+  newTable?: string
+  path?: string
+  fileFormat?: string
+  descriptions?: Omit<ObjectDescription, 'samples'>[]
+}
+
+interface ConnectionContextReq {
+  source?: ConnectionSelectionReq | null
+  sink?: ConnectionSelectionReq | null
+}
+
 interface AiConversation {
   messages: SavedMessage[]
   updateTime: string | null
   updateUserName: string | null
+  context?: ConnectionContextReq | null
 }
 
-export { AiStatus, AiConversationQuery, SavedMessage, AiConversation }
+export {
+  AiStatus,
+  AiConversationQuery,
+  SavedMessage,
+  AiConversation,
+  ConnectionSelectionReq,
+  ConnectionContextReq
+}

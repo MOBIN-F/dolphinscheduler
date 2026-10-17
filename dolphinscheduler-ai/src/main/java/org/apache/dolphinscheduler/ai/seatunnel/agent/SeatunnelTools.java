@@ -17,12 +17,19 @@
 
 package org.apache.dolphinscheduler.ai.seatunnel.agent;
 
+import org.apache.dolphinscheduler.ai.seatunnel.metadata.ConnectorMetadata;
 import org.apache.dolphinscheduler.ai.seatunnel.metadata.ConnectorMetadataRepository;
+import org.apache.dolphinscheduler.ai.seatunnel.metadata.OptionMetadata;
 import org.apache.dolphinscheduler.ai.seatunnel.validation.HoconValidator;
+import org.apache.dolphinscheduler.ai.seatunnel.validation.ValidationIssue;
+import org.apache.dolphinscheduler.ai.seatunnel.validation.ValidationResult;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -48,6 +55,7 @@ public class SeatunnelTools {
     private final ConnectorMetadataRepository metadataRepository;
     private final HoconValidator validator;
     private final HttpSampleFetcher httpSampleFetcher;
+    private final ConnectionTools connectionTools = new ConnectionTools();
     private final ObjectMapper mapper = new ObjectMapper();
     private final List<ToolSpecification> specifications;
 
@@ -107,7 +115,25 @@ public class SeatunnelTools {
                             .build())
                     .build());
         }
+        specifications.addAll(connectionTools.specifications());
         this.specifications = List.copyOf(specifications);
+    }
+
+    /**
+     * @return the counts of the errors and the warnings, the issues as the details
+     */
+    static StepReport validationReport(ValidationResult validation) {
+        if (validation.skipped()) {
+            return StepReport.warn(Map.of("skipped", true, "reason", String.valueOf(validation.skipReason())),
+                    List.of());
+        }
+        long errors = validation.errors().size();
+        long warnings = validation.issues().size() - errors;
+        List<String> details = validation.issues().stream().map(ValidationIssue::toString)
+                .collect(Collectors.toList());
+        Map<String, Object> result = Map.of("errors", errors, "warnings", warnings);
+        return errors > 0 ? new StepReport(AgentStep.ERROR, result, details)
+                : warnings > 0 ? StepReport.warn(result, details) : StepReport.ok(result, details);
     }
 
     public List<ToolSpecification> specifications() {
@@ -127,22 +153,37 @@ public class SeatunnelTools {
         }
         switch (request.name()) {
             case LIST_CONNECTORS:
+                context.report(StepReport.ok(Map.of(
+                        "sources", metadataRepository.names(ConnectorMetadataRepository.SOURCE).size(),
+                        "transforms", metadataRepository.names(ConnectorMetadataRepository.TRANSFORM).size(),
+                        "sinks", metadataRepository.names(ConnectorMetadataRepository.SINK).size()), List.of()));
                 return metadataRepository.catalog();
             case GET_CONNECTOR_INFO:
                 String name = arguments.path("connector_name").asText();
                 String type = arguments.path("connector_type").asText();
-                return metadataRepository.find(type, name)
-                        .map(metadataRepository::describe)
-                        .orElse("Connector '" + name + "' (" + type + ") is not installed. Installed " + type
-                                + " connectors: " + metadataRepository.names(type));
+                Optional<ConnectorMetadata> connector = metadataRepository.find(type, name);
+                if (connector.isEmpty()) {
+                    context.report(StepReport.error("not installed"));
+                    return "Connector '" + name + "' (" + type + ") is not installed. Installed " + type
+                            + " connectors: " + metadataRepository.names(type);
+                }
+                context.report(StepReport.ok(Map.of("required", connector.get().required().size(), "optional",
+                        connector.get().optional().size()),
+                        connector.get().required().stream().map(OptionMetadata::key).collect(Collectors.toList())));
+                return metadataRepository.describe(connector.get());
             case VALIDATE_CONFIG:
-                return validator.validate(arguments.path("config").asText()).describe();
+                ValidationResult validation = validator.validate(arguments.path("config").asText());
+                context.report(validationReport(validation));
+                return validation.describe();
             case FETCH_HTTP_SAMPLE:
                 if (httpSampleFetcher == null) {
                     return "Unknown tool: " + request.name();
                 }
                 return httpSampleFetcher.fetch(arguments, context);
             default:
+                if (connectionTools.handles(request.name())) {
+                    return connectionTools.execute(request.name(), arguments, context);
+                }
                 return "Unknown tool: " + request.name();
         }
     }

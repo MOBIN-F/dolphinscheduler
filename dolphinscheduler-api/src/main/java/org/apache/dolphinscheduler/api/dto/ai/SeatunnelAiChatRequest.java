@@ -18,6 +18,7 @@
 package org.apache.dolphinscheduler.api.dto.ai;
 
 import org.apache.dolphinscheduler.ai.seatunnel.agent.ChatTurn;
+import org.apache.dolphinscheduler.api.dto.seatunnel.ConnectionContextRequest;
 
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,11 @@ public class SeatunnelAiChatRequest {
      */
     private long projectCode;
 
+    /**
+     * The task of the script, optional: e.g. the Kafka consumer group of the job is derived from it.
+     */
+    private Long taskCode;
+
     private List<ChatTurn> history;
 
     private String userInput;
@@ -48,4 +54,9 @@ public class SeatunnelAiChatRequest {
      * Task context, e.g. startupScript, deployMode, runMode.
      */
     private Map<String, String> context;
+
+    /**
+     * The connections selected for the source and the sink, optional.
+     */
+    private ConnectionContextRequest connections;
 }

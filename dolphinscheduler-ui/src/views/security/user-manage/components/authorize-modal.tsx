@@ -198,6 +198,15 @@ export const AuthorizeModal = defineComponent({
             class={styles.transfer}
           />
         )}
+        {type === 'authorize_seatunnel_connection' && (
+          <NTransfer
+            virtualScroll
+            options={this.unauthorizedConnections}
+            filterable
+            v-model:value={this.authorizedConnections}
+            class={styles.transfer}
+          />
+        )}
         {type === 'authorize_namespace' && (
           <NTransfer
             virtualScroll

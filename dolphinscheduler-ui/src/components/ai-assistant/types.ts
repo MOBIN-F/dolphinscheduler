@@ -40,6 +40,22 @@ interface Proposal {
 }
 
 /**
+ * A step of the progress of a reply: a tool call, a validation, an LLM call, with its result
+ */
+interface ProgressStep {
+  id: number
+  kind: string
+  state: 'running' | 'ok' | 'warn' | 'error'
+  args: Record<string, any>
+  result: Record<string, any>
+  /**
+   * Shown when the step is expanded, not saved
+   */
+  details?: string[]
+  millis?: number
+}
+
+/**
  * Raw response of an HTTP API call of the assistant, shown to the user only and not saved
  */
 interface HttpResponseSample {
@@ -69,7 +85,12 @@ interface ChatMessage {
    * Progress shown under a streaming assistant message, e.g. a tool call
    */
   statuses: { status: string; detail: string | null }[]
+  steps?: ProgressStep[]
   httpResponses?: HttpResponseSample[]
+  /**
+   * Data sampled by the assistant, e.g. the latest messages of a topic: masked, shown only, not saved
+   */
+  samples?: { title: string; samples: string[] }[]
   streaming: boolean
   /**
    * Excluded from the history after the user reverted the turn
@@ -84,6 +105,10 @@ interface ChatMessage {
    */
   userName?: string
   time?: number
+  /**
+   * A note of a user action, e.g. the selected source was changed; sent to the AI as a user message
+   */
+  note?: boolean
   /**
    * Validation summary of the proposal, kept for the saved conversation
    */
@@ -108,6 +133,7 @@ export {
   ValidationIssue,
   ValidationResult,
   Proposal,
+  ProgressStep,
   HttpResponseSample,
   ProposalState,
   ChatMessage,

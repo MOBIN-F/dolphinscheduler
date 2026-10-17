@@ -17,6 +17,8 @@
 
 package org.apache.dolphinscheduler.api.dto.ai;
 
+import org.apache.dolphinscheduler.api.dto.seatunnel.ConnectionContextRequest;
+
 import java.util.List;
 
 import lombok.Data;
@@ -37,4 +39,9 @@ public class AiConversationRequest {
     private String assistant;
 
     private List<AiConversationMessage> messages;
+
+    /**
+     * The connections selected for the source and the sink, without secrets.
+     */
+    private ConnectionContextRequest context;
 }

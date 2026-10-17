@@ -39,6 +39,7 @@ import org.apache.dolphinscheduler.api.service.TaskInstanceService;
 import org.apache.dolphinscheduler.api.service.UsersService;
 import org.apache.dolphinscheduler.api.service.WorkflowDefinitionService;
 import org.apache.dolphinscheduler.api.service.WorkflowInstanceService;
+import org.apache.dolphinscheduler.api.service.seatunnel.SeatunnelConnectionService;
 import org.apache.dolphinscheduler.api.utils.PageInfo;
 import org.apache.dolphinscheduler.api.utils.Result;
 import org.apache.dolphinscheduler.common.constants.CommandKeyConstants;
@@ -116,6 +117,12 @@ public class WorkflowInstanceServiceImpl extends BaseServiceImpl implements Work
     public static final String TASK_TYPE = "taskType";
 
     public static final String LOCAL_PARAMS_LIST = "localParamsList";
+
+    /**
+     * Checks the SeaTunnel connections referenced by the SeaTunnel tasks.
+     */
+    @Autowired
+    private SeatunnelConnectionService seatunnelConnectionService;
 
     @Autowired
     ProjectDao projectDao;
@@ -470,6 +477,7 @@ public class WorkflowInstanceServiceImpl extends BaseServiceImpl implements Work
                 throw new ServiceException(Status.WORKFLOW_NODE_S_PARAMETER_INVALID, taskDefinitionLog.getName());
             }
         }
+        seatunnelConnectionService.checkReferences(loginUser, taskDefinitionLogs);
         int saveTaskResult = processService.saveTaskDefine(loginUser, projectCode, taskDefinitionLogs, syncDefine);
         if (saveTaskResult == Constants.DEFINITION_FAILURE) {
             log.error("Update task definition error, projectCode:{}, workflowInstanceId:{}", projectCode,

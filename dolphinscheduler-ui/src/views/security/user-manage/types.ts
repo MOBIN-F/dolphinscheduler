@@ -25,6 +25,7 @@ type TUserType = 'GENERAL_USER' | 'ADMIN_USER' | ''
 type TAuthType =
   | 'authorize_project'
   | 'authorize_datasource'
+  | 'authorize_seatunnel_connection'
   | 'authorize_namespace'
 
 interface IRecord {

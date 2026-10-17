@@ -47,6 +47,7 @@ import org.apache.dolphinscheduler.api.service.TaskDefinitionService;
 import org.apache.dolphinscheduler.api.service.WorkflowDefinitionService;
 import org.apache.dolphinscheduler.api.service.WorkflowInstanceService;
 import org.apache.dolphinscheduler.api.service.WorkflowLineageService;
+import org.apache.dolphinscheduler.api.service.seatunnel.SeatunnelConnectionService;
 import org.apache.dolphinscheduler.api.utils.CheckUtils;
 import org.apache.dolphinscheduler.api.utils.PageInfo;
 import org.apache.dolphinscheduler.api.utils.Result;
@@ -145,6 +146,12 @@ import com.google.common.collect.Lists;
 @Service
 @Slf4j
 public class WorkflowDefinitionServiceImpl extends BaseServiceImpl implements WorkflowDefinitionService {
+
+    /**
+     * Checks the SeaTunnel connections referenced by the SeaTunnel tasks.
+     */
+    @Autowired
+    private SeatunnelConnectionService seatunnelConnectionService;
 
     @Autowired
     private ProjectDao projectDao;
@@ -271,6 +278,7 @@ public class WorkflowDefinitionServiceImpl extends BaseServiceImpl implements Wo
                                                  List<WorkflowTaskRelationLog> taskRelationList,
                                                  WorkflowDefinition workflowDefinition,
                                                  List<TaskDefinitionLog> taskDefinitionLogs) {
+        seatunnelConnectionService.checkReferences(loginUser, taskDefinitionLogs);
         int saveTaskResult = processService.saveTaskDefine(loginUser, workflowDefinition.getProjectCode(),
                 taskDefinitionLogs, Boolean.TRUE);
         if (saveTaskResult == Constants.EXIT_CODE_SUCCESS) {
@@ -694,6 +702,7 @@ public class WorkflowDefinitionServiceImpl extends BaseServiceImpl implements Wo
                                                  WorkflowDefinition workflowDefinition,
                                                  WorkflowDefinition workflowDefinitionDeepCopy,
                                                  List<TaskDefinitionLog> taskDefinitionLogs) {
+        seatunnelConnectionService.checkReferences(loginUser, taskDefinitionLogs);
         int saveTaskResult = processService.saveTaskDefine(loginUser, workflowDefinition.getProjectCode(),
                 taskDefinitionLogs, Boolean.TRUE);
         if (saveTaskResult == Constants.EXIT_CODE_SUCCESS) {

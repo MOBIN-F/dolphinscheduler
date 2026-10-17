@@ -595,7 +595,20 @@ public enum Status {
             "AI 助手请求过于频繁，请稍后再试"),
     AI_ASSISTANT_BUSY(1404003, "AI assistant is busy, please try again later", "AI 助手繁忙，请稍后再试"),
     AI_ASSISTANT_INPUT_EMPTY(1404004, "The message to the AI assistant is empty", "发送给 AI 助手的消息为空"),
-    ;
+
+    SEATUNNEL_CONNECTION_NOT_FOUND(1405001, "SeaTunnel connection {0} not found", "SeaTunnel 连接 {0} 不存在"),
+    SEATUNNEL_CONNECTION_KEY_INVALID(1405002,
+            "Invalid connection key {0}: 2 to 64 lowercase letters, digits or underscores, starting with a letter",
+            "连接标识 {0} 不合法：2~64 位小写字母、数字或下划线，以字母开头"),
+    SEATUNNEL_CONNECTION_EXISTS(1405003, "SeaTunnel connection {0} already exists", "SeaTunnel 连接 {0} 已存在"),
+    SEATUNNEL_CONNECTION_PARAM_INVALID(1405004, "Invalid SeaTunnel connection: {0}", "SeaTunnel 连接参数错误：{0}"),
+    SEATUNNEL_CONNECTION_IN_USE(1405005, "SeaTunnel connection {0} is used by the tasks: {1}",
+            "SeaTunnel 连接 {0} 正在被以下任务使用：{1}"),
+    SEATUNNEL_CONNECTION_FAILED(1405006, "Failed to access the SeaTunnel connection: {0}",
+            "访问 SeaTunnel 连接失败：{0}"),
+    SEATUNNEL_CONNECTION_NOT_AUTHORIZED(1405007, "No permission to use the SeaTunnel connection {0}",
+            "没有使用 SeaTunnel 连接 {0} 的权限"),
+            ;
 
     @Getter
     private final int code;

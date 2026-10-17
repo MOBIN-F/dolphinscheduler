@@ -32,6 +32,7 @@ import org.apache.dolphinscheduler.api.enums.Status;
 import org.apache.dolphinscheduler.api.exceptions.ServiceException;
 import org.apache.dolphinscheduler.api.service.impl.ProjectServiceImpl;
 import org.apache.dolphinscheduler.api.service.impl.TaskDefinitionServiceImpl;
+import org.apache.dolphinscheduler.api.service.seatunnel.SeatunnelConnectionService;
 import org.apache.dolphinscheduler.common.constants.Constants;
 import org.apache.dolphinscheduler.common.enums.Flag;
 import org.apache.dolphinscheduler.common.enums.ReleaseState;
@@ -81,6 +82,10 @@ import org.mockito.quality.Strictness;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 public class TaskDefinitionServiceImplTest {
+
+    @Mock
+
+    private SeatunnelConnectionService seatunnelConnectionService;
 
     @InjectMocks
     private TaskDefinitionServiceImpl taskDefinitionService;

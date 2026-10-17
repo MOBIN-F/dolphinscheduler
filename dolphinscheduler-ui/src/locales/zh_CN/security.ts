@@ -16,6 +16,29 @@
  */
 
 export default {
+  seatunnel_connection: {
+    create: '创建连接',
+    edit: '编辑',
+    delete: '删除',
+    delete_confirm: '确定删除该连接吗？被任务引用的连接不能删除',
+    deleted: '已删除',
+    saved: '已保存',
+    test: '测试连接',
+    test_success: '连接成功',
+    cancel: '取消',
+    confirm: '确定',
+    type: '类型',
+    name: '名称',
+    key: '连接标识',
+    key_tips:
+      "脚本中以 ${'{'}stconn.标识.字段{'}'} 引用密码，创建后不能修改；2~64 位小写字母、数字或下划线，以字母开头",
+    description: '描述',
+    update_user: '更新人',
+    update_time: '更新时间',
+    operation: '操作',
+    secret_kept: '已设置，留空表示不修改',
+    authorize: 'SeaTunnel连接'
+  },
   tenant: {
     tenant_manage: '租户管理',
     create_tenant: '创建租户',
@@ -157,6 +180,7 @@ export default {
     authorize_project: '项目授权',
     authorize_namespace: '命名空间授权',
     authorize_datasource: '数据源授权',
+    authorize_seatunnel_connection: 'SeaTunnel连接授权',
     username: '用户名',
     username_exists: '用户名已存在',
     username_tips: '请输入用户名',

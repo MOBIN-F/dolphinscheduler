@@ -17,11 +17,17 @@
 
 package org.apache.dolphinscheduler.ai.seatunnel.agent;
 
+import org.apache.dolphinscheduler.ai.connection.ConnectionConfigChecker;
+import org.apache.dolphinscheduler.ai.connection.ConnectionSelection;
+import org.apache.dolphinscheduler.ai.connection.ConnectionType;
 import org.apache.dolphinscheduler.ai.seatunnel.metadata.ConnectorMetadataRepository;
 import org.apache.dolphinscheduler.ai.seatunnel.validation.HoconValidator;
 import org.apache.dolphinscheduler.ai.seatunnel.validation.SeatunnelEngineChecker;
+import org.apache.dolphinscheduler.ai.seatunnel.validation.ValidationIssue;
 import org.apache.dolphinscheduler.ai.seatunnel.validation.ValidationResult;
 import org.apache.dolphinscheduler.ai.security.CredentialRedactor;
+import org.apache.dolphinscheduler.ai.security.HostGuard;
+import org.apache.dolphinscheduler.ai.security.SensitiveData;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -30,6 +36,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -43,6 +50,9 @@ import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
@@ -69,7 +79,8 @@ public class SeatunnelConfigAgent {
 
     private static final Logger log = LoggerFactory.getLogger(SeatunnelConfigAgent.class);
 
-    private static final int MAX_TOOL_ROUNDS = 8;
+    private static final int MAX_TOOL_ROUNDS = 12;
+    private static final ObjectMapper MAPPER = new ObjectMapper();
     private static final int MAX_HISTORY_MESSAGES = 20;
     private static final Pattern CODE_BLOCK = Pattern.compile("```(\\w*)[ \\t]*\\r?\\n(.*?)```", Pattern.DOTALL);
 
@@ -81,6 +92,7 @@ public class SeatunnelConfigAgent {
     private final HoconValidator validator;
     private final SeatunnelEngineChecker engineChecker;
     private final SeatunnelTools tools;
+    private final HostGuard hostGuard;
     private final int maxFixAttempts;
 
     private final String systemTemplate;
@@ -110,6 +122,7 @@ public class SeatunnelConfigAgent {
         this.engineChecker = engineChecker;
         this.maxFixAttempts = maxFixAttempts;
         this.tools = new SeatunnelTools(metadataRepository, validator, httpSampleFetcher);
+        this.hostGuard = httpSampleFetcher == null ? new HostGuard(List.of(), false) : httpSampleFetcher.hostGuard();
         this.systemTemplate = loadPrompt("system.md");
         this.fixTemplate = loadPrompt("fix.md");
         this.goldenExamples = loadPrompt("golden-examples.md");
@@ -136,10 +149,19 @@ public class SeatunnelConfigAgent {
         messages.add(SystemMessage.from(buildSystemPrompt(request, redactor)));
         messages.addAll(buildHistory(request, redactor));
         messages.add(UserMessage.from(buildUserMessage(request, redactor)));
-        ToolContext toolContext = new ToolContext(redactor, allowedHosts(request), listener::onHttpResponse);
+        // The raw response is shown to the user with the personal data masked
+        ToolContext toolContext = new ToolContext(redactor, allowedHosts(request),
+                sample -> listener.onHttpResponse(new HttpResponseSample(sample.target(), sample.status(),
+                        sample.contentType(), sample.size(), sample.truncated(),
+                        SensitiveData.maskSample(sample.body()))),
+                request.references())
+                        .withConnections(request.connectionBackend(), allowedHostNames(request), hostGuard,
+                                listener::onSample, request.taskCode());
 
+        ProgressSteps steps = new ProgressSteps(listener, redactor);
+        reportSelections(request.connections(), steps);
         listener.onStatus(AgentEventListener.STATUS_THINKING, null);
-        String reply = runWithTools(messages, toolContext, listener, true, cancelled);
+        String reply = runWithTools(messages, toolContext, listener, steps, true, cancelled);
         String config = extractConfig(reply);
         String explanation = removeConfig(reply);
         if (config == null) {
@@ -152,31 +174,43 @@ public class SeatunnelConfigAgent {
         ValidationResult engine;
         while (true) {
             listener.onStatus(AgentEventListener.STATUS_VALIDATING_LOCAL, null);
-            local = validator.validate(config);
+            ProgressSteps.Started localStep = steps.start(AgentStep.VALIDATE_LOCAL, Map.of());
+            List<ConnectionSelection> rules = new ArrayList<>(request.connections());
+            rules.addAll(toolContext.usedConnections());
+            local = withConnectionRules(validator.validate(config), config, rules);
+            localStep.end(SeatunnelTools.validationReport(local));
             engine = ValidationResult.skipped(ValidationResult.STAGE_ENGINE, "local validation failed");
             if (local.valid()) {
+                ProgressSteps.Started engineStep = steps.start(AgentStep.VALIDATE_ENGINE, Map.of());
                 if (engineChecker.isEnabled()) {
                     listener.onStatus(AgentEventListener.STATUS_VALIDATING_ENGINE, null);
                 }
                 // The config still contains the placeholders of the credentials, no secret is written to disk
                 engine = engineChecker.check(config);
+                engineStep.end(SeatunnelTools.validationReport(engine));
             }
             if ((local.valid() && engine.valid()) || fixAttempts >= maxFixAttempts) {
                 break;
             }
             fixAttempts++;
             listener.onStatus(AgentEventListener.STATUS_FIXING, String.valueOf(fixAttempts));
-            String validation = (local.valid() ? engine : local).describe();
+            ValidationResult failed = local.valid() ? engine : local;
+            String validation = failed.describe();
+            ProgressSteps.Started fixStep = steps.start(AgentStep.FIXING, Map.of("round", fixAttempts));
             messages.add(UserMessage.from(fixTemplate.replace("{{VALIDATION}}", validation)));
-            String fixReply = runWithTools(messages, toolContext, listener, false, cancelled);
+            String fixReply = runWithTools(messages, toolContext, listener, steps, false, cancelled);
             String fixedConfig = extractConfig(fixReply);
+            List<String> reasons = failed.errors().stream().map(ValidationIssue::toString).collect(Collectors.toList());
+            fixStep.end(fixedConfig == null
+                    ? new StepReport(AgentStep.ERROR, Map.of("generated", false), reasons)
+                    : StepReport.ok(Map.of("generated", true), reasons));
             if (fixedConfig == null) {
                 break;
             }
             config = fixedConfig;
         }
         // Only the config gets the real credentials back, the text shown in the chat keeps them masked
-        listener.onProposal(new SeatunnelProposal(redactor.restore(config), CredentialRedactor.mask(explanation),
+        listener.onProposal(new SeatunnelProposal(redactor.restoreConfig(config), CredentialRedactor.mask(explanation),
                 local, engine, fixAttempts));
         listener.onDone(CredentialRedactor.mask(explanation));
     }
@@ -188,12 +222,15 @@ public class SeatunnelConfigAgent {
      * @return the final text reply
      */
     private String runWithTools(List<ChatMessage> messages, ToolContext toolContext, AgentEventListener listener,
-                                boolean streamText, BooleanSupplier cancelled) throws Exception {
+                                ProgressSteps steps, boolean streamText,
+                                BooleanSupplier cancelled) throws Exception {
         for (int round = 0; round < MAX_TOOL_ROUNDS; round++) {
             if (cancelled.getAsBoolean()) {
                 throw new CancelledException();
             }
+            ProgressSteps.Started thinking = steps.start(AgentStep.THINKING, Map.of());
             ChatResponse response = stream(messages, streamText ? listener : null);
+            thinking.end(null);
             AiMessage aiMessage = response.aiMessage();
             messages.add(aiMessage);
             if (!aiMessage.hasToolExecutionRequests()) {
@@ -204,11 +241,18 @@ public class SeatunnelConfigAgent {
                     // The query and the headers may contain credentials, only the target is shown
                     listener.onStatus(AgentEventListener.STATUS_HTTP_SAMPLE,
                             HttpSampleFetcher.describeTarget(toolRequest.arguments()));
+                } else if (connectionStatus(toolRequest.name()) != null) {
+                    // The parameters of a connection may contain credentials, only the target is shown
+                    listener.onStatus(connectionStatus(toolRequest.name()), connectionTarget(toolRequest));
                 } else {
                     listener.onStatus(AgentEventListener.STATUS_TOOL,
                             toolRequest.name() + " " + toolRequest.arguments());
                 }
-                messages.add(ToolExecutionResultMessage.from(toolRequest, tools.execute(toolRequest, toolContext)));
+                ProgressSteps.Started step = steps.start(stepKind(toolRequest.name()), stepArgs(toolRequest));
+                String result = tools.execute(toolRequest, toolContext);
+                StepReport report = toolContext.takeReport();
+                step.end(report != null ? report : fallbackReport(result));
+                messages.add(ToolExecutionResultMessage.from(toolRequest, result));
             }
             if (streamText) {
                 listener.onDelta("\n");
@@ -252,6 +296,7 @@ public class SeatunnelConfigAgent {
                 .replace("{{SEATUNNEL_VERSION}}", metadataRepository.version())
                 .replace("{{CONNECTOR_CATALOG}}", metadataRepository.catalog())
                 .replace("{{TASK_CONTEXT}}", describeContext(request.context()))
+                .replace("{{SELECTED_CONNECTIONS}}", describeConnections(request.connections()))
                 .replace("{{GOLDEN_EXAMPLES}}", goldenExamples);
         List<ChatTurn> history = request.history();
         if (history.size() > MAX_HISTORY_MESSAGES) {
@@ -305,7 +350,148 @@ public class SeatunnelConfigAgent {
         request.history().stream()
                 .filter(turn -> ChatTurn.USER.equals(turn.role()))
                 .forEach(turn -> texts.add(turn.content()));
+        // The HTTP connection the user selected
+        request.connections().stream()
+                .filter(selection -> selection.connection().type() == ConnectionType.HTTP)
+                .forEach(selection -> texts.add(selection.connection().param("base_url")));
         return HttpSampleFetcher.allowedHosts(texts.toArray(new String[0]));
+    }
+
+    /**
+     * Add the issues of the rules of the selected connections, e.g. the consumer group prefix of a Kafka cluster.
+     */
+    private static ValidationResult withConnectionRules(ValidationResult local, String config,
+                                                        List<ConnectionSelection> connections) {
+        List<ValidationIssue> issues = ConnectionConfigChecker.check(config, connections);
+        if (issues.isEmpty()) {
+            return local;
+        }
+        List<ValidationIssue> all = new ArrayList<>(local.issues());
+        all.addAll(issues);
+        return ValidationResult.of(ValidationResult.STAGE_LOCAL, all);
+    }
+
+    private static String stepKind(String tool) {
+        switch (tool) {
+            case SeatunnelTools.GET_CONNECTOR_INFO:
+                return AgentStep.CONNECTOR_INFO;
+            case SeatunnelTools.LIST_CONNECTORS:
+                return AgentStep.LIST_CONNECTORS;
+            case SeatunnelTools.VALIDATE_CONFIG:
+                return AgentStep.CHECK_CONFIG;
+            case SeatunnelTools.FETCH_HTTP_SAMPLE:
+                return AgentStep.HTTP_SAMPLE;
+            case ConnectionTools.LIST_CONNECTIONS:
+                return AgentStep.LIST_CONNECTIONS;
+            case ConnectionTools.BROWSE_CONNECTION:
+                return AgentStep.BROWSE;
+            case ConnectionTools.DESCRIBE_OBJECT:
+                return AgentStep.DESCRIBE;
+            default:
+                return AgentStep.TOOL;
+        }
+    }
+
+    /**
+     * @return the arguments shown in the progress: names and targets only, never parameters or credentials
+     */
+    private static Map<String, Object> stepArgs(ToolExecutionRequest toolRequest) {
+        JsonNode arguments;
+        try {
+            String raw = toolRequest.arguments();
+            arguments = MAPPER.readTree(raw == null || raw.isBlank() ? "{}" : raw);
+        } catch (IOException e) {
+            arguments = MAPPER.createObjectNode();
+        }
+        switch (toolRequest.name()) {
+            case SeatunnelTools.GET_CONNECTOR_INFO:
+                return Map.of("name", arguments.path("connector_name").asText(), "type",
+                        arguments.path("connector_type").asText());
+            case SeatunnelTools.FETCH_HTTP_SAMPLE:
+                return Map.of("target", HttpSampleFetcher.describeTarget(toolRequest.arguments()));
+            case ConnectionTools.LIST_CONNECTIONS:
+            case SeatunnelTools.LIST_CONNECTORS:
+            case SeatunnelTools.VALIDATE_CONFIG:
+                return Map.of();
+            case ConnectionTools.BROWSE_CONNECTION:
+            case ConnectionTools.DESCRIBE_OBJECT:
+                return Map.of("target", ConnectionTools.describeTarget(arguments));
+            default:
+                return Map.of("name", toolRequest.name());
+        }
+    }
+
+    /**
+     * The result of a tool which did not report: a failure by its text, otherwise done.
+     */
+    static StepReport fallbackReport(String result) {
+        String text = result == null ? "" : result;
+        for (String prefix : List.of("Failed", "Not called", "Request failed", "Unknown tool", "Invalid tool")) {
+            if (text.startsWith(prefix)) {
+                return StepReport.error(text.split("\n")[0]);
+            }
+        }
+        return StepReport.ok(Map.of(), List.of());
+    }
+
+    /**
+     * The fields of the selected connections, so that the progress shows where the fields come from.
+     */
+    private static void reportSelections(List<ConnectionSelection> selections, ProgressSteps steps) {
+        for (ConnectionSelection selection : selections) {
+            int fields = selection.descriptions().stream().mapToInt(description -> description.fields().size())
+                    .sum();
+            List<String> details = selection.descriptions().stream()
+                    .flatMap(description -> description.fields().stream()
+                            .map(field -> description.object() + "." + field.name() + ": " + field.type()))
+                    .collect(Collectors.toList());
+            steps.instant(AgentStep.SELECTION,
+                    Map.of("role", selection.role().name().toLowerCase(Locale.ROOT), "target", selection.summary()),
+                    StepReport.ok(Map.of("fields", fields, "objects", selection.objects().size(), "newTable",
+                            selection.newTable() != null && !selection.newTable().isEmpty()), details));
+        }
+    }
+
+    private static String connectionStatus(String tool) {
+        switch (tool) {
+            case ConnectionTools.LIST_CONNECTIONS:
+                return AgentEventListener.STATUS_LIST_CONNECTIONS;
+            case ConnectionTools.BROWSE_CONNECTION:
+                return AgentEventListener.STATUS_BROWSE;
+            case ConnectionTools.DESCRIBE_OBJECT:
+                return AgentEventListener.STATUS_DESCRIBE;
+            default:
+                return null;
+        }
+    }
+
+    private static String connectionTarget(ToolExecutionRequest toolRequest) {
+        try {
+            String raw = toolRequest.arguments();
+            return ConnectionTools.describeTarget(MAPPER.readTree(raw == null || raw.isBlank() ? "{}" : raw));
+        } catch (IOException e) {
+            return "";
+        }
+    }
+
+    /**
+     * The inline connections of the tools may only use the host names the user wrote.
+     */
+    private static Set<String> allowedHostNames(SeatunnelChatRequest request) {
+        List<String> texts = new ArrayList<>();
+        texts.add(request.userInput());
+        texts.add(request.currentScript());
+        request.history().stream()
+                .filter(turn -> ChatTurn.USER.equals(turn.role()))
+                .forEach(turn -> texts.add(turn.content()));
+        return HostGuard.hostNames(texts.toArray(new String[0]));
+    }
+
+    private static String describeConnections(List<ConnectionSelection> connections) {
+        if (connections.isEmpty()) {
+            return "No connection is selected, the user describes the source and the sink in the conversation.";
+        }
+        return connections.stream().map(ConnectionSelection::toPrompt).collect(Collectors.joining("\n"));
     }
 
     private String buildUserMessage(SeatunnelChatRequest request, CredentialRedactor redactor) {

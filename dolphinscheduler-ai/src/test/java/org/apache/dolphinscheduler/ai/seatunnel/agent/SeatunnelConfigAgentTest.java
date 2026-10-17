@@ -108,6 +108,60 @@ public class SeatunnelConfigAgentTest {
     }
 
     @Test
+    public void testProgressSteps() {
+        ScriptedModel model = new ScriptedModel();
+        model.replies.add(AiMessage.from(ToolExecutionRequest.builder().id("1").name("get_connector_info")
+                .arguments("{\"connector_name\":\"Jdbc\",\"connector_type\":\"source\"}").build(),
+                ToolExecutionRequest.builder().id("2").name("get_connector_info")
+                        .arguments("{\"connector_name\":\"Nope\",\"connector_type\":\"sink\"}").build()));
+        model.replies.add(AiMessage.from("```hocon\n" + CONFIG_WITHOUT_DRIVER + "\n```"));
+        model.replies.add(AiMessage.from("```hocon\n" + CONFIG_WITHOUT_DRIVER.replace("username",
+                "driver = \"com.mysql.cj.jdbc.Driver\", username") + "\n```"));
+        RecordingListener listener = new RecordingListener();
+        ConnectorMetadataRepository repository = ConnectorMetadataRepository.load("", "2.3.13");
+        org.apache.dolphinscheduler.ai.connection.SeatunnelConnection kafka =
+                new org.apache.dolphinscheduler.ai.connection.SeatunnelConnection("kafka_dev", "Kafka dev",
+                        org.apache.dolphinscheduler.ai.connection.ConnectionType.KAFKA,
+                        Map.of("bootstrap_servers", "b:9092", "security_protocol", "PLAINTEXT"), Map.of());
+        agent(model).chat(new SeatunnelChatRequest(List.of(), "sync, password is S3cret!", "", Map.of(),
+                List.of(new org.apache.dolphinscheduler.ai.connection.ConnectionSelection(
+                        org.apache.dolphinscheduler.ai.connection.ConnectionType.Role.SOURCE, kafka,
+                        List.of("orders"), null, null, null,
+                        List.of(new org.apache.dolphinscheduler.ai.connection.ObjectDescription("orders", "json",
+                                List.of(new org.apache.dolphinscheduler.ai.connection.DescribedField("id", "int",
+                                        false, false, "1", "")),
+                                null, "", List.of())))),
+                Map.of()), listener, () -> false);
+
+        Assertions.assertEquals(List.of("selection:ok", "thinking:ok", "connector_info:ok", "connector_info:error",
+                "thinking:ok", "validate_local:error", "thinking:ok", "fixing:ok", "validate_local:ok",
+                "validate_engine:warn"),
+                listener.steps());
+        // Every step ends with the id it started with
+        Assertions.assertEquals(listener.started.size(), listener.ended.size());
+        AgentStep selection = listener.ended.get(0);
+        Assertions.assertEquals(1, selection.result().get("fields"));
+        Assertions.assertEquals("source", selection.args().get("role"));
+        AgentStep jdbc = listener.ended.get(2);
+        Assertions.assertEquals("Jdbc", jdbc.args().get("name"));
+        Assertions.assertTrue(((Integer) jdbc.result().get("required")) > 0, jdbc.result().toString());
+        Assertions.assertEquals("not installed", listener.ended.get(3).result().get("message"));
+        AgentStep validation = listener.ended.get(5);
+        Assertions.assertEquals(1L, validation.result().get("errors"));
+        Assertions.assertTrue(validation.details().get(0).contains("[driver]"), validation.details().toString());
+        AgentStep fixing = listener.ended.get(7);
+        Assertions.assertEquals(1, fixing.args().get("round"));
+        Assertions.assertEquals(true, fixing.result().get("generated"));
+        // The engine validation is not configured: shown with the reason, not hidden
+        AgentStep engine = listener.ended.get(9);
+        Assertions.assertEquals(true, engine.result().get("skipped"));
+        Assertions.assertFalse(String.valueOf(engine.result().get("reason")).isEmpty());
+        // No credential in any step
+        Assertions.assertFalse((listener.started.toString() + listener.ended).contains("S3cret!"));
+        Assertions.assertFalse((listener.started.toString() + listener.ended).contains("_CRED_"));
+    }
+
+    @Test
     public void testQuestionWithoutConfig() {
         ScriptedModel model = new ScriptedModel();
         model.replies.add(AiMessage.from("Which database and table do you want to sync?"));

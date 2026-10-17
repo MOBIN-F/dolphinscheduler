@@ -14,6 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import {
+  authorizedConnections,
+  grantConnections,
+  unauthorizedConnections
+} from '@/service/modules/seatunnel-connections'
 import { reactive } from 'vue'
 import { queryProjectWithAuthorizedLevelListPaging } from '@/service/modules/projects'
 import {
@@ -44,6 +49,8 @@ export function useAuthorize() {
     unauthorizedProjects: [] as IOption[],
     authorizedDatasources: [] as number[],
     unauthorizedDatasources: [] as IOption[],
+    authorizedConnections: [] as number[],
+    unauthorizedConnections: [] as IOption[],
     authorizedNamespaces: [] as number[],
     unauthorizedNamespaces: [] as IOption[],
     resourceType: 'file',
@@ -137,6 +144,26 @@ export function useAuthorize() {
     )
   }
 
+  const getConnections = async (userId: number) => {
+    if (state.loading) return
+    state.loading = true
+    try {
+      const [authorized, unauthorized] = await Promise.all([
+        authorizedConnections({ userId }),
+        unauthorizedConnections({ userId })
+      ])
+      state.authorizedConnections = authorized.map((item) => item.id)
+      state.unauthorizedConnections = [...authorized, ...unauthorized].map(
+        (item) => ({
+          label: `${item.name} (${item.connKey})`,
+          value: item.id
+        })
+      )
+    } finally {
+      state.loading = false
+    }
+  }
+
   const getNamespaces = async (userId: number) => {
     if (state.loading) return
     state.loading = true
@@ -166,6 +193,9 @@ export function useAuthorize() {
     if (type === 'authorize_namespace') {
       getNamespaces(userId)
     }
+    if (type === 'authorize_seatunnel_connection') {
+      getConnections(userId)
+    }
   }
 
   /*
@@ -178,6 +208,12 @@ export function useAuthorize() {
       await grantDataSource({
         userId,
         datasourceIds: state.authorizedDatasources.join(',')
+      })
+    }
+    if (type === 'authorize_seatunnel_connection') {
+      await grantConnections({
+        userId,
+        connectionIds: state.authorizedConnections.join(',')
       })
     }
     if (type === 'authorize_namespace') {

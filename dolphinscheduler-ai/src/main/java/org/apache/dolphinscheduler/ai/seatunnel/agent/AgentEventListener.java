@@ -28,6 +28,9 @@ public interface AgentEventListener {
     String STATUS_VALIDATING_ENGINE = "validating_engine";
     String STATUS_FIXING = "fixing";
     String STATUS_HTTP_SAMPLE = "http_sample";
+    String STATUS_LIST_CONNECTIONS = "list_connections";
+    String STATUS_BROWSE = "browse";
+    String STATUS_DESCRIBE = "describe";
 
     /**
      * A chunk of the assistant reply.
@@ -45,6 +48,24 @@ public interface AgentEventListener {
      * The raw response of an HTTP API call, shown to the user only.
      */
     default void onHttpResponse(HttpResponseSample sample) {
+    }
+
+    /**
+     * A step of the progress started, e.g. a tool call.
+     */
+    default void onStepStart(AgentStep step) {
+    }
+
+    /**
+     * A step of the progress finished, with its result.
+     */
+    default void onStepEnd(AgentStep step) {
+    }
+
+    /**
+     * Sampled data of a source, shown to the user only.
+     */
+    default void onSample(DataSample sample) {
     }
 
     /**

@@ -22,6 +22,8 @@ import static org.apache.dolphinscheduler.api.constants.ApiFuncIdentificationCon
 
 import org.apache.dolphinscheduler.ai.config.AiProperties;
 import org.apache.dolphinscheduler.ai.seatunnel.agent.AgentEventListener;
+import org.apache.dolphinscheduler.ai.seatunnel.agent.AgentStep;
+import org.apache.dolphinscheduler.ai.seatunnel.agent.DataSample;
 import org.apache.dolphinscheduler.ai.seatunnel.agent.HttpResponseSample;
 import org.apache.dolphinscheduler.ai.seatunnel.agent.SeatunnelChatRequest;
 import org.apache.dolphinscheduler.ai.seatunnel.agent.SeatunnelConfigAgent;
@@ -32,12 +34,16 @@ import org.apache.dolphinscheduler.ai.seatunnel.validation.ValidationResult;
 import org.apache.dolphinscheduler.ai.security.CredentialRedactor;
 import org.apache.dolphinscheduler.api.dto.ai.AiConversationMessage;
 import org.apache.dolphinscheduler.api.dto.ai.AiConversationRequest;
+import org.apache.dolphinscheduler.api.dto.ai.AiConversationStep;
 import org.apache.dolphinscheduler.api.dto.ai.AiConversationVO;
 import org.apache.dolphinscheduler.api.dto.ai.SeatunnelAiChatRequest;
+import org.apache.dolphinscheduler.api.dto.seatunnel.ConnectionContextRequest;
+import org.apache.dolphinscheduler.api.dto.seatunnel.ConnectionSelectionRequest;
 import org.apache.dolphinscheduler.api.enums.Status;
 import org.apache.dolphinscheduler.api.exceptions.ServiceException;
 import org.apache.dolphinscheduler.api.service.AiAssistantService;
 import org.apache.dolphinscheduler.api.service.ProjectService;
+import org.apache.dolphinscheduler.api.service.seatunnel.SeatunnelConnectionService;
 import org.apache.dolphinscheduler.common.utils.JSONUtils;
 import org.apache.dolphinscheduler.dao.entity.AiConversation;
 import org.apache.dolphinscheduler.dao.entity.User;
@@ -90,6 +96,8 @@ public class AiAssistantServiceImpl implements AiAssistantService {
     private static final int MAX_SAVED_MESSAGES = 200;
     private static final int MAX_MESSAGE_LENGTH = 20000;
     private static final int MAX_CONVERSATION_BYTES = 1024 * 1024;
+    private static final int MAX_CONTEXT_BYTES = 256 * 1024;
+    private static final int MAX_SAVED_STEPS = 60;
 
     private final AiProperties aiProperties;
     private final ObjectProvider<SeatunnelConfigAgent> seatunnelAgent;
@@ -97,6 +105,7 @@ public class AiAssistantServiceImpl implements AiAssistantService {
     private final ProjectService projectService;
     private final AiConversationDao aiConversationDao;
     private final UserDao userDao;
+    private final SeatunnelConnectionService connectionService;
 
     /**
      * Each request runs several LLM calls and a validation process, so the concurrency is bounded.
@@ -114,13 +123,14 @@ public class AiAssistantServiceImpl implements AiAssistantService {
     public AiAssistantServiceImpl(AiProperties aiProperties, ObjectProvider<SeatunnelConfigAgent> seatunnelAgent,
                                   ObjectProvider<SeatunnelEngineChecker> engineChecker,
                                   ProjectService projectService, AiConversationDao aiConversationDao,
-                                  UserDao userDao) {
+                                  UserDao userDao, SeatunnelConnectionService connectionService) {
         this.aiProperties = aiProperties;
         this.seatunnelAgent = seatunnelAgent;
         this.engineChecker = engineChecker;
         this.projectService = projectService;
         this.aiConversationDao = aiConversationDao;
         this.userDao = userDao;
+        this.connectionService = connectionService;
     }
 
     @Override
@@ -151,8 +161,12 @@ public class AiAssistantServiceImpl implements AiAssistantService {
         emitter.onTimeout(() -> cancelled.set(true));
         emitter.onError(error -> cancelled.set(true));
 
+        // Checks that the user may use the selected connections, the secrets stay on the server
+        SeatunnelConnectionService.ResolvedContext connections =
+                connectionService.resolve(loginUser, request.getConnections(), request.getTaskCode());
         SeatunnelChatRequest chatRequest = new SeatunnelChatRequest(request.getHistory(), request.getUserInput(),
-                request.getCurrentScript(), request.getContext());
+                request.getCurrentScript(), request.getContext(), connections.getSelections(),
+                connections.getReferences(), connectionService.toolBackend(loginUser), request.getTaskCode());
         try {
             executor.execute(() -> {
                 long start = System.currentTimeMillis();
@@ -184,15 +198,17 @@ public class AiAssistantServiceImpl implements AiAssistantService {
         Optional<AiConversation> conversation = queryConversationOfProject(loginUser, projectCode, taskCode,
                 assistant);
         if (!conversation.isPresent()) {
-            return new AiConversationVO(new ArrayList<>(), null, null);
+            return new AiConversationVO(new ArrayList<>(), null, null, null);
         }
         List<AiConversationMessage> messages = JSONUtils.parseObject(conversation.get().getMessages(),
                 new TypeReference<List<AiConversationMessage>>() {
                 });
         Integer updateUser = conversation.get().getUpdateUser();
         User user = updateUser == null ? null : userDao.queryById(updateUser);
+        String context = conversation.get().getContext();
         return new AiConversationVO(messages == null ? new ArrayList<>() : messages,
-                conversation.get().getUpdateTime(), user == null ? null : user.getUserName());
+                conversation.get().getUpdateTime(), user == null ? null : user.getUserName(),
+                StringUtils.isBlank(context) ? null : JSONUtils.parseObject(context, ConnectionContextRequest.class));
     }
 
     @Override
@@ -212,6 +228,7 @@ public class AiAssistantServiceImpl implements AiAssistantService {
                 .projectCode(request.getProjectCode())
                 .assistant(request.getAssistant())
                 .messages(json)
+                .context(contextJson(request.getContext()))
                 .updateUser(loginUser.getId())
                 .build());
     }
@@ -223,6 +240,25 @@ public class AiAssistantServiceImpl implements AiAssistantService {
         aiConversationDao.deleteByTaskCode(taskCode, assistant);
         log.info("AI assistant conversation deleted, user: {}, project: {}, task: {}, assistant: {}",
                 loginUser.getUserName(), projectCode, taskCode, assistant);
+    }
+
+    /**
+     * @return the selected connections as json, the field descriptions are dropped when they are too large
+     */
+    static String contextJson(ConnectionContextRequest context) {
+        if (context == null) {
+            return null;
+        }
+        String json = JSONUtils.toJsonString(context);
+        if (json.getBytes(StandardCharsets.UTF_8).length <= MAX_CONTEXT_BYTES) {
+            return json;
+        }
+        for (ConnectionSelectionRequest selection : Arrays.asList(context.getSource(), context.getSink())) {
+            if (selection != null) {
+                selection.setDescriptions(null);
+            }
+        }
+        return JSONUtils.toJsonString(context);
     }
 
     private void checkConversationAccess(User loginUser, long projectCode, String assistant, String permission) {
@@ -269,6 +305,7 @@ public class AiAssistantServiceImpl implements AiAssistantService {
             saved.setContent(content.length() > MAX_MESSAGE_LENGTH ? content.substring(0, MAX_MESSAGE_LENGTH)
                     : content);
             saved.setTime(message.getTime());
+            saved.setNote(Boolean.TRUE.equals(message.getNote()) ? Boolean.TRUE : null);
             if ("user".equals(message.getRole())) {
                 saved.setUserName(StringUtils.isBlank(message.getUserName()) ? loginUser.getUserName()
                         : StringUtils.abbreviate(message.getUserName(), 128));
@@ -277,9 +314,50 @@ public class AiAssistantServiceImpl implements AiAssistantService {
                 saved.setValid(message.getValid());
                 saved.setFixAttempts(message.getFixAttempts());
                 saved.setError(StringUtils.abbreviate(message.getError(), 1000));
+                saved.setSteps(sanitizeSteps(message.getSteps()));
             }
             result.add(saved);
         }
+        return result;
+    }
+
+    /**
+     * The saved steps: limited in number and length, the strings are redacted.
+     */
+    private static List<AiConversationStep> sanitizeSteps(List<AiConversationStep> steps) {
+        if (steps == null || steps.isEmpty()) {
+            return null;
+        }
+        List<AiConversationStep> result = new ArrayList<>();
+        for (AiConversationStep step : steps.subList(0, Math.min(steps.size(), MAX_SAVED_STEPS))) {
+            if (step == null || StringUtils.isBlank(step.getKind())) {
+                continue;
+            }
+            AiConversationStep saved = new AiConversationStep();
+            saved.setKind(StringUtils.abbreviate(step.getKind(), 32));
+            saved.setState(StringUtils.abbreviate(step.getState(), 16));
+            saved.setArgs(sanitizeValues(step.getArgs()));
+            saved.setResult(sanitizeValues(step.getResult()));
+            saved.setMillis(step.getMillis());
+            result.add(saved);
+        }
+        return result;
+    }
+
+    private static Map<String, Object> sanitizeValues(Map<String, Object> values) {
+        if (values == null) {
+            return null;
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        values.entrySet().stream().limit(10).forEach(entry -> {
+            Object value = entry.getValue();
+            if (value instanceof Number || value instanceof Boolean) {
+                result.put(StringUtils.abbreviate(entry.getKey(), 32), value);
+            } else if (value != null) {
+                String text = CredentialRedactor.mask(new CredentialRedactor().redactText(String.valueOf(value)));
+                result.put(StringUtils.abbreviate(entry.getKey(), 32), StringUtils.abbreviate(text, 300));
+            }
+        });
         return result;
     }
 
@@ -376,6 +454,36 @@ public class AiAssistantServiceImpl implements AiAssistantService {
             data.put("truncated", sample.truncated());
             data.put("body", sample.body());
             send("http_response", data);
+        }
+
+        @Override
+        public void onStepStart(AgentStep step) {
+            send("step", step(step));
+        }
+
+        @Override
+        public void onStepEnd(AgentStep step) {
+            send("step_end", step(step));
+        }
+
+        private static Map<String, Object> step(AgentStep step) {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("id", step.id());
+            data.put("kind", step.kind());
+            data.put("state", step.state());
+            data.put("args", step.args());
+            data.put("result", step.result());
+            data.put("details", step.details());
+            data.put("millis", step.millis());
+            return data;
+        }
+
+        @Override
+        public void onSample(DataSample sample) {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("title", sample.title());
+            data.put("samples", sample.samples());
+            send("sample", data);
         }
 
         @Override

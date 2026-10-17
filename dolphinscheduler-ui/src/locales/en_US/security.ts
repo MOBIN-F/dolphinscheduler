@@ -16,6 +16,30 @@
  */
 
 export default {
+  seatunnel_connection: {
+    create: 'Create Connection',
+    edit: 'Edit',
+    delete: 'Delete',
+    delete_confirm:
+      'Delete the connection? A connection used by tasks can not be deleted',
+    deleted: 'Deleted',
+    saved: 'Saved',
+    test: 'Test Connection',
+    test_success: 'Connected',
+    cancel: 'Cancel',
+    confirm: 'Confirm',
+    type: 'Type',
+    name: 'Name',
+    key: 'Connection Key',
+    key_tips:
+      "The scripts reference the secrets as ${'{'}stconn.key.field{'}'}, it can not be changed later: 2 to 64 lowercase letters, digits or underscores, starting with a letter",
+    description: 'Description',
+    update_user: 'Updated By',
+    update_time: 'Update Time',
+    operation: 'Operation',
+    secret_kept: 'Set, leave empty to keep it',
+    authorize: 'SeaTunnel Connection'
+  },
   tenant: {
     tenant_manage: 'Tenant Manage',
     create_tenant: 'Create Tenant',
@@ -159,6 +183,7 @@ export default {
     authorize_project: 'Project Authorize',
     authorize_namespace: 'Namespace Authorize',
     authorize_datasource: 'Datasource Authorize',
+    authorize_seatunnel_connection: 'SeaTunnel Connection Authorize',
     username: 'Username',
     username_exists: 'The username already exists',
     username_tips: 'Please enter username',

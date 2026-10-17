@@ -28,3 +28,11 @@ ai:
     max-calls-per-request: 3
     # Extra hosts, IPs or CIDRs never called, loopback / link-local (cloud metadata) / multicast are always denied
     denied-hosts: []
+  # The SeaTunnel connections of the security center (SeaTunnel 配置)
+  connection:
+    # Timeout to connect, list the topics / tables and sample the data
+    timeout: 10s
+  # Personal data in the sampled messages: the AI only gets the format, the page shows it masked
+  sensitive:
+    # Field name keywords in addition to the built-in ones (phone, email, id_card, name, age, address, ...)
+    field-keywords: []

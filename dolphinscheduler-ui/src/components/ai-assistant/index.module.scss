@@ -142,6 +142,70 @@
   font-size: 12px;
 }
 
+.steps {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.steps-summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.step-line {
+  padding-left: 12px;
+  line-height: 20px;
+}
+
+.step-ok {
+  color: #18a058;
+}
+
+.step-warn {
+  color: #f0a020;
+}
+
+.step-error {
+  color: #d03050;
+}
+
+.step-running {
+  color: #2080f0;
+}
+
+.step-summary {
+  color: #8c8c8c;
+}
+
+.step-time {
+  color: #bbb;
+}
+
+.step-details {
+  margin: 2px 0 4px 28px;
+  padding: 4px 8px;
+  max-height: 200px;
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.04);
+  border-radius: 4px;
+  font-family: Menlo, Consolas, monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.note {
+  margin: 6px 0;
+  text-align: center;
+  color: #8c8c8c;
+  font-size: 12px;
+}
+
 .http-responses {
   margin-top: 6px;
   font-size: 12px;

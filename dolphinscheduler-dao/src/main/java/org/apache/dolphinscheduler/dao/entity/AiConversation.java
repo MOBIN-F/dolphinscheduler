@@ -55,6 +55,11 @@ public class AiConversation {
      */
     private String messages;
 
+    /**
+     * The connections selected for the source and the sink as json, without secrets.
+     */
+    private String context;
+
     private Integer createUser;
 
     private Integer updateUser;

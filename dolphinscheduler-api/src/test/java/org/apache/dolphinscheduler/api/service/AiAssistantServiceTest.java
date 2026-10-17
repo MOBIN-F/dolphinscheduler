@@ -20,6 +20,7 @@ package org.apache.dolphinscheduler.api.service;
 import static org.apache.dolphinscheduler.api.AssertionsHelper.assertThrowsServiceException;
 import static org.apache.dolphinscheduler.api.constants.ApiFuncIdentificationConstant.WORKFLOW_DEFINITION;
 import static org.apache.dolphinscheduler.api.constants.ApiFuncIdentificationConstant.WORKFLOW_UPDATE;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -34,10 +35,12 @@ import org.apache.dolphinscheduler.ai.seatunnel.validation.ValidationIssue;
 import org.apache.dolphinscheduler.ai.seatunnel.validation.ValidationResult;
 import org.apache.dolphinscheduler.api.dto.ai.AiConversationMessage;
 import org.apache.dolphinscheduler.api.dto.ai.AiConversationRequest;
+import org.apache.dolphinscheduler.api.dto.ai.AiConversationStep;
 import org.apache.dolphinscheduler.api.dto.ai.AiConversationVO;
 import org.apache.dolphinscheduler.api.dto.ai.SeatunnelAiChatRequest;
 import org.apache.dolphinscheduler.api.enums.Status;
 import org.apache.dolphinscheduler.api.service.impl.AiAssistantServiceImpl;
+import org.apache.dolphinscheduler.api.service.seatunnel.SeatunnelConnectionService;
 import org.apache.dolphinscheduler.common.utils.JSONUtils;
 import org.apache.dolphinscheduler.dao.entity.AiConversation;
 import org.apache.dolphinscheduler.dao.entity.User;
@@ -45,6 +48,7 @@ import org.apache.dolphinscheduler.dao.repository.AiConversationDao;
 import org.apache.dolphinscheduler.dao.repository.UserDao;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -64,6 +68,7 @@ public class AiAssistantServiceTest {
     private final ProjectService projectService = mock(ProjectService.class);
     private final AiConversationDao conversationDao = mock(AiConversationDao.class);
     private final UserDao userDao = mock(UserDao.class);
+    private final SeatunnelConnectionService connectionService = mock(SeatunnelConnectionService.class);
     private AiAssistantServiceImpl service;
     private final User user = new User();
 
@@ -73,8 +78,10 @@ public class AiAssistantServiceTest {
         ObjectProvider<SeatunnelConfigAgent> agentProvider = mock(ObjectProvider.class);
         when(agentProvider.getIfAvailable()).thenReturn(agent);
         ObjectProvider<SeatunnelEngineChecker> checkerProvider = mock(ObjectProvider.class);
+        when(connectionService.resolve(any(), any(), any()))
+                .thenReturn(new SeatunnelConnectionService.ResolvedContext(new ArrayList<>(), new HashMap<>()));
         service = new AiAssistantServiceImpl(properties, agentProvider, checkerProvider, projectService,
-                conversationDao, userDao);
+                conversationDao, userDao, connectionService);
         user.setId(1);
         user.setUserName("admin");
     }
@@ -197,6 +204,41 @@ public class AiAssistantServiceTest {
                 () -> service.queryConversation(user, 100L, 1L, "seatunnel"));
         assertThrowsServiceException(Status.USER_NO_OPERATION_PROJECT_PERM,
                 () -> service.deleteConversation(user, 100L, 1L, "seatunnel"));
+    }
+
+    @Test
+    public void testSavedStepsAreLimitedAndRedacted() {
+        properties.setEnabled(true);
+        when(conversationDao.queryByTaskCode(1L, "seatunnel")).thenReturn(Optional.empty());
+        List<AiConversationStep> steps = new ArrayList<>();
+        for (int i = 0; i < 70; i++) {
+            AiConversationStep step = new AiConversationStep();
+            step.setKind("describe");
+            step.setState("error");
+            step.setArgs(java.util.Collections.singletonMap("target", "kafka_dev / orders"));
+            step.setResult(java.util.Collections.singletonMap("message", "login failed, password is S3cret!"));
+            step.setMillis(12L);
+            steps.add(step);
+        }
+        AiConversationMessage reply = message("assistant", "done");
+        reply.setSteps(steps);
+        AiConversationRequest request = new AiConversationRequest();
+        request.setProjectCode(100L);
+        request.setTaskCode(1L);
+        request.setAssistant("seatunnel");
+        request.setMessages(new ArrayList<>(java.util.Collections.singletonList(reply)));
+
+        service.saveConversation(user, request);
+
+        ArgumentCaptor<AiConversation> captor = ArgumentCaptor.forClass(AiConversation.class);
+        verify(conversationDao).upsert(captor.capture());
+        String saved = captor.getValue().getMessages();
+        Assertions.assertFalse(saved.contains("S3cret!"), saved);
+        Assertions.assertTrue(saved.contains("kafka_dev / orders"), saved);
+        List<AiConversationMessage> messages = JSONUtils.parseObject(saved,
+                new com.fasterxml.jackson.core.type.TypeReference<List<AiConversationMessage>>() {
+                });
+        Assertions.assertEquals(60, messages.get(0).getSteps().size());
     }
 
     @Test

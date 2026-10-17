@@ -17,6 +17,8 @@
 
 package org.apache.dolphinscheduler.api.dto.ai;
 
+import org.apache.dolphinscheduler.api.dto.seatunnel.ConnectionContextRequest;
+
 import java.util.Date;
 import java.util.List;
 
@@ -37,4 +39,6 @@ public class AiConversationVO {
     private Date updateTime;
 
     private String updateUserName;
+
+    private ConnectionContextRequest context;
 }

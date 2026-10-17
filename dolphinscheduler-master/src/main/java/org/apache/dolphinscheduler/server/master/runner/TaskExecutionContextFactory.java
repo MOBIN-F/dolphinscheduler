@@ -79,6 +79,9 @@ public class TaskExecutionContextFactory {
     @Autowired
     private IEnvironmentDao environmentDao;
 
+    @Autowired
+    private SeatunnelConnectionParamResolver seatunnelConnectionParamResolver;
+
     public TaskExecutionContext createTaskExecutionContext(TaskExecutionContextCreateRequest request) {
         final TaskInstance taskInstance = request.getTaskInstance();
         final WorkflowInstance workflowInstance = request.getWorkflowInstance();
@@ -172,12 +175,15 @@ public class TaskExecutionContextFactory {
                 taskInstance.getTaskType(),
                 taskInstance.getTaskParams());
 
-        return curingParamsService.paramParsingPreparation(
+        final Map<String, Property> prepareParams = curingParamsService.paramParsingPreparation(
                 taskInstance,
                 baseParam,
                 workflowInstance,
                 project.getName(),
                 workflowDefinition.getName());
+        // The secrets of the SeaTunnel connections referenced by the script
+        return seatunnelConnectionParamResolver.resolve(taskInstance.getTaskType(), taskInstance.getTaskParams(),
+                prepareParams);
     }
 
     private Optional<String> getEnvironmentConfigFromDB(final TaskInstance taskInstance) {

@@ -36,6 +36,7 @@
         <!-- Must match the version used by langchain4j-bedrock -->
         <aws-sdk-v2.version>2.42.4</aws-sdk-v2.version>
         <typesafe-config.version>1.4.3</typesafe-config.version>
+        <kafka-clients.version>3.2.0</kafka-clients.version>
         <!-- maven-dependency-plugin 3.1.1 used by the root pom can not read Java 17 class files -->
         <analyze.skip>true</analyze.skip>
     </properties>
@@ -76,6 +77,26 @@
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>aws-crt-client</artifactId>
             <version>${aws-sdk-v2.version}</version>
+        </dependency>
+
+        <!-- Lists the topics and samples messages of the SeaTunnel Kafka connections, the version of SeaTunnel 2.3.13 -->
+        <dependency>
+            <groupId>org.apache.kafka</groupId>
+            <artifactId>kafka-clients</artifactId>
+            <version>${kafka-clients.version}</version>
+            <exclusions>
+                <!-- The api server has a newer snappy-java -->
+                <exclusion>
+                    <groupId>org.xerial.snappy</groupId>
+                    <artifactId>snappy-java</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <!-- The version required by kafka-clients, the bom pins an older one -->
+            <groupId>org.lz4</groupId>
+            <artifactId>lz4-java</artifactId>
+            <version>1.8.0</version>
         </dependency>
 
         <dependency>

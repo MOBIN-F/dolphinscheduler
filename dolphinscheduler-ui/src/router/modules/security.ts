@@ -96,6 +96,17 @@ export default {
       }
     },
     {
+      path: '/security/seatunnel-connection',
+      name: 'seatunnel-connection',
+      component: components['security-seatunnel-connection'],
+      meta: {
+        title: 'SeaTunnel配置',
+        activeMenu: 'security',
+        showSide: true,
+        auth: ['ADMIN_USER']
+      }
+    },
+    {
       path: '/security/cluster-manage',
       name: 'cluster-manage',
       component: components['security-cluster-manage'],

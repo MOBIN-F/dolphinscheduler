@@ -17,6 +17,8 @@
 
 package org.apache.dolphinscheduler.ai.config;
 
+import org.apache.dolphinscheduler.ai.connection.HttpConnectionBrowser;
+import org.apache.dolphinscheduler.ai.connection.KafkaConnectionBrowser;
 import org.apache.dolphinscheduler.ai.llm.BedrockChatModels;
 import org.apache.dolphinscheduler.ai.llm.TokenUsageLogger;
 import org.apache.dolphinscheduler.ai.seatunnel.agent.HttpSampleFetcher;
@@ -24,6 +26,7 @@ import org.apache.dolphinscheduler.ai.seatunnel.agent.SeatunnelConfigAgent;
 import org.apache.dolphinscheduler.ai.seatunnel.metadata.ConnectorMetadataRepository;
 import org.apache.dolphinscheduler.ai.seatunnel.validation.HoconValidator;
 import org.apache.dolphinscheduler.ai.seatunnel.validation.SeatunnelEngineChecker;
+import org.apache.dolphinscheduler.ai.security.SensitiveData;
 
 import java.util.List;
 
@@ -61,12 +64,32 @@ public class AiConfiguration {
 
     @Bean
     @ConditionalOnProperty(prefix = "ai", name = "enabled", havingValue = "true")
+    public HttpSampleFetcher httpSampleFetcher(AiProperties properties) {
+        return new HttpSampleFetcher(properties.getHttpSample());
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "ai", name = "enabled", havingValue = "true")
+    public KafkaConnectionBrowser kafkaConnectionBrowser(AiProperties properties) {
+        return new KafkaConnectionBrowser(properties.getConnection().getTimeout());
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "ai", name = "enabled", havingValue = "true")
+    public HttpConnectionBrowser httpConnectionBrowser(HttpSampleFetcher httpSampleFetcher) {
+        return new HttpConnectionBrowser(httpSampleFetcher);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "ai", name = "enabled", havingValue = "true")
     public SeatunnelConfigAgent seatunnelConfigAgent(AiProperties properties, BedrockChatModels models,
                                                      ConnectorMetadataRepository metadataRepository,
-                                                     SeatunnelEngineChecker engineChecker) {
+                                                     SeatunnelEngineChecker engineChecker,
+                                                     HttpSampleFetcher httpSampleFetcher) {
+        SensitiveData.addKeywords(properties.getSensitive().getFieldKeywords());
         return new SeatunnelConfigAgent(models.mainModel(), models.fastModel(), models.maxTokens(),
                 properties.getLlm().getTimeout(), metadataRepository, new HoconValidator(metadataRepository),
                 engineChecker, properties.getSeatunnel().getMaxFixAttempts(),
-                properties.getHttpSample().isEnabled() ? new HttpSampleFetcher(properties.getHttpSample()) : null);
+                properties.getHttpSample().isEnabled() ? httpSampleFetcher : null);
     }
 }

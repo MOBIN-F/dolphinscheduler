@@ -17,13 +17,17 @@
 
 package org.apache.dolphinscheduler.ai.seatunnel.agent;
 
-import org.apache.dolphinscheduler.ai.security.CredentialRedactor;
+import org.apache.dolphinscheduler.ai.connection.DescribedField;
+import org.apache.dolphinscheduler.ai.security.SensitiveData;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -35,7 +39,7 @@ import com.fasterxml.jackson.databind.JsonNode;
  * array of records. The result is sent to the LLM instead of the document, so the values are truncated and the
  * values of sensitive keys are masked.
  */
-class JsonFieldInferrer {
+public class JsonFieldInferrer {
 
     static final int MAX_ARRAY_ELEMENTS = 50;
     static final int MAX_FIELDS = 300;
@@ -43,10 +47,6 @@ class JsonFieldInferrer {
     static final int MAX_SAMPLE_LENGTH = 50;
 
     private static final String ELEMENT = "[*]";
-
-    private static final Pattern SENSITIVE_KEY = Pattern.compile(
-            "(?i).*(password|passwd|pwd|secret|token|auth|credential|session|cookie|signature|api[_-]?key|"
-                    + "access[_-]?key|private[_-]?key).*|(?i)(.*[_-])?key");
 
     private static final Pattern DATE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
     private static final Pattern DATE_SLASH = Pattern.compile("\\d{4}/\\d{2}/\\d{2}( \\d{2}:\\d{2}:\\d{2})?");
@@ -70,6 +70,10 @@ class JsonFieldInferrer {
         int maxElements;
         String sample;
         String format;
+        /**
+         * The description of a sensitive value, e.g. mobile number: the field has no sample then
+         */
+        String sensitive;
 
         Field(String path, String parentPath) {
             this.path = path;
@@ -78,16 +82,51 @@ class JsonFieldInferrer {
     }
 
     /**
+     * The fields of the records in a JSON document.
+     *
+     * @param recordPath the JsonPath of the array of the records, {@code $} for an array document, null when the
+     *                   document is a single record
+     * @param fields     the fields relative to a record, nested fields are joined with dots
+     */
+    public record RecordSchema(String recordPath, List<DescribedField> fields) {
+    }
+
+    /**
      * @return the description of the fields for the LLM
      */
     static String describe(JsonNode root) {
+        return of(root).describe();
+    }
+
+    /**
+     * @param root a JSON document, or an array of records such as the messages of a topic
+     */
+    public static RecordSchema records(JsonNode root) {
+        JsonFieldInferrer inferrer = of(root);
+        Field records = inferrer.recordArray();
+        String prefix = records == null ? "$." : records.path + ELEMENT + ".";
+        List<DescribedField> result = new ArrayList<>();
+        for (Field field : inferrer.fields.values()) {
+            if (!field.path.startsWith(prefix) || field.path.endsWith(ELEMENT)) {
+                continue;
+            }
+            String name = field.path.substring(prefix.length()).replace(ELEMENT, "[*]");
+            String note = field.sensitive == null ? field.format
+                    : "sensitive, " + field.sensitive + (field.format == null ? "" : ", " + field.format);
+            result.add(new DescribedField(name, inferrer.type(field), inferrer.isNullable(field), false,
+                    field.sample, note));
+        }
+        return new RecordSchema(records == null ? null : records.path, result);
+    }
+
+    private static JsonFieldInferrer of(JsonNode root) {
         JsonFieldInferrer inferrer = new JsonFieldInferrer();
         if (root.isObject()) {
             inferrer.visitObject(root, "$", 0);
         } else {
             inferrer.visitValue(root, "$", "", null, 0);
         }
-        return inferrer.describe();
+        return inferrer;
     }
 
     private void visitObject(JsonNode node, String path, int depth) {
@@ -147,8 +186,16 @@ class JsonFieldInferrer {
         if (format != null) {
             field.format = field.format == null || field.format.equals(format) ? format : "mixed formats";
         }
-        if (field.sample == null) {
-            field.sample = sample(value, name);
+        // Personal or secret data: only the format is given, never the value
+        String text = value.asText();
+        Optional<SensitiveData.Kind> kind = SensitiveData.classify(name, text);
+        if (kind.isPresent()) {
+            if (field.sensitive == null) {
+                field.sensitive = SensitiveData.describe(kind.get(), text);
+            }
+            field.sample = null;
+        } else if (field.sample == null && field.sensitive == null) {
+            field.sample = sample(value);
         }
     }
 
@@ -197,6 +244,9 @@ class JsonFieldInferrer {
         }
         if (isNullable(field)) {
             text.append(", nullable");
+        }
+        if (field.sensitive != null) {
+            text.append(", sensitive, ").append(field.sensitive);
         }
         if (field.format != null) {
             text.append(", ").append(field.format);
@@ -285,10 +335,7 @@ class JsonFieldInferrer {
         return null;
     }
 
-    private static String sample(JsonNode value, String name) {
-        if (SENSITIVE_KEY.matcher(name).matches()) {
-            return CredentialRedactor.MASK;
-        }
+    private static String sample(JsonNode value) {
         if (!value.isTextual()) {
             return value.asText();
         }

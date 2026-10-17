@@ -145,6 +145,10 @@ export function useColumns(onCallback: Function) {
                       key: 'authorize_datasource'
                     },
                     {
+                      label: t('security.seatunnel_connection.authorize'),
+                      key: 'authorize_seatunnel_connection'
+                    },
+                    {
                       label: t('security.user.namespace'),
                       key: 'authorize_namespace'
                     }

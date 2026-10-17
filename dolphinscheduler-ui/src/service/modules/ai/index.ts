@@ -20,6 +20,7 @@ import type {
   AiConversation,
   AiConversationQuery,
   AiStatus,
+  ConnectionContextReq,
   SavedMessage
 } from './types'
 
@@ -42,13 +43,14 @@ export function getAiConversation(
 
 export function saveAiConversation(
   params: AiConversationQuery,
-  messages: SavedMessage[]
+  messages: SavedMessage[],
+  context?: ConnectionContextReq | null
 ): Promise<void> {
   return axios({
     url: '/ai/conversations',
     method: 'put',
     headers: { 'Content-Type': 'application/json' },
-    data: JSON.stringify({ ...params, messages })
+    data: JSON.stringify({ ...params, messages, context })
   }) as unknown as Promise<void>
 }
 

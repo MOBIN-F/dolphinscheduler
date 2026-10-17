@@ -18,7 +18,6 @@
 package org.apache.dolphinscheduler.server.worker.executor;
 
 import org.apache.dolphinscheduler.common.constants.Constants;
-import org.apache.dolphinscheduler.common.utils.JSONUtils;
 import org.apache.dolphinscheduler.common.utils.PropertyUtils;
 import org.apache.dolphinscheduler.plugin.storage.api.StorageOperator;
 import org.apache.dolphinscheduler.plugin.task.api.AbstractTask;
@@ -34,6 +33,7 @@ import org.apache.dolphinscheduler.task.executor.ITaskExecutor;
 import org.apache.dolphinscheduler.task.executor.TaskExecutorState;
 import org.apache.dolphinscheduler.task.executor.TaskExecutorStateMappings;
 import org.apache.dolphinscheduler.task.executor.events.TaskExecutorRuntimeContextChangedLifecycleEvent;
+import org.apache.dolphinscheduler.task.executor.log.TaskExecutionContextLogs;
 
 import java.util.ArrayList;
 
@@ -138,7 +138,7 @@ public class PhysicalTaskExecutor extends AbstractTaskExecutor {
         log.info("Download resources successfully: {}", taskExecutionContext.getResourceContext());
 
         log.info(TaskLogMarkers.excludeInTaskLog(), "Initialized Task Context{}",
-                JSONUtils.toPrettyJsonString(taskExecutionContext));
+                TaskExecutionContextLogs.toMaskedJson(taskExecutionContext));
 
     }
 

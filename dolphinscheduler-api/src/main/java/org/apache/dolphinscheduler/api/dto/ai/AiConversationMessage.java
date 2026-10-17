@@ -17,6 +17,8 @@
 
 package org.apache.dolphinscheduler.api.dto.ai;
 
+import java.util.List;
+
 import lombok.Data;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -40,6 +42,16 @@ public class AiConversationMessage {
      * The user who sent the message
      */
     private String userName;
+
+    /**
+     * A note of the user action in the conversation, e.g. the selected source was changed.
+     */
+    private Boolean note;
+
+    /**
+     * The progress steps of an assistant message, without the details.
+     */
+    private List<AiConversationStep> steps;
 
     /**
      * Epoch millis

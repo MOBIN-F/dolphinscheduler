@@ -109,6 +109,15 @@ export function useAiSession(options: AiSessionOptions) {
         content: message.content,
         userName: message.userName,
         time: message.time,
+        note: message.note,
+        steps: message.steps?.map(({ kind, state, args, result, millis }) => ({
+          kind,
+          // A step still running when the request stopped
+          state: state === 'running' ? 'error' : state,
+          args,
+          result,
+          millis
+        })),
         // A proposal waiting for the decision can not be accepted after reopening
         proposalState:
           message.proposalState === 'pending'
@@ -156,6 +165,15 @@ export function useAiSession(options: AiSessionOptions) {
         restored: true,
         userName: message.userName,
         time: message.time,
+        note: message.note,
+        steps: message.steps?.map((step, index) => ({
+          id: index + 1,
+          kind: step.kind,
+          state: step.state as any,
+          args: step.args || {},
+          result: step.result || {},
+          millis: step.millis
+        })),
         proposalState: message.proposalState as ChatMessage['proposalState'],
         valid: message.valid,
         fixAttempts: message.fixAttempts,
@@ -224,6 +242,17 @@ export function useAiSession(options: AiSessionOptions) {
               ...(reply.httpResponses || []),
               data as HttpResponseSample
             ]
+          } else if (event === 'step') {
+            reply.steps = [...(reply.steps || []), { ...data, details: [] }]
+          } else if (event === 'step_end') {
+            const step = reply.steps?.find((item) => item.id === data.id)
+            if (step) Object.assign(step, data)
+            else reply.steps = [...(reply.steps || []), data]
+          } else if (event === 'sample') {
+            reply.samples = [
+              ...(reply.samples || []),
+              { title: data.title, samples: data.samples || [] }
+            ]
           } else if (event === 'error') {
             reply.error = data.message
           }
@@ -242,6 +271,25 @@ export function useAiSession(options: AiSessionOptions) {
   }
 
   const stop = () => controller?.abort()
+
+  /**
+   * Add a note of a user action to the conversation, e.g. the selected source was changed. The AI sees it in the
+   * history of the next request.
+   */
+  const addNote = (text: string) => {
+    if (options.readonly) return
+    state.messages.push({
+      id: nextId++,
+      role: 'user',
+      content: text,
+      statuses: [],
+      streaming: false,
+      note: true,
+      userName: options.userName?.(),
+      time: Date.now()
+    })
+    scheduleSave()
+  }
 
   const accept = (script: string) => {
     const message = pending.value
@@ -334,6 +382,8 @@ export function useAiSession(options: AiSessionOptions) {
     load,
     send,
     stop,
+    addNote,
+    scheduleSave,
     accept,
     reject,
     revert,

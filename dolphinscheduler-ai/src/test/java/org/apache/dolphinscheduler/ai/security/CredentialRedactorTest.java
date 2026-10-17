@@ -69,4 +69,38 @@ public class CredentialRedactorTest {
         Assertions.assertEquals(first, second);
         Assertions.assertEquals(1, redactor.redactedCount());
     }
+
+    @Test
+    public void testPasswordsWithQuotes() {
+        CredentialRedactor redactor = new CredentialRedactor();
+        String text = redactor.redactText("用户 postgres，密码是 Pg\"Pa\\ss1，目标表 t");
+        Assertions.assertFalse(text.contains("Pa"), text);
+        Assertions.assertTrue(text.endsWith("，目标表 t"), text);
+        Assertions.assertEquals("用户 postgres，密码是 Pg\"Pa\\ss1，目标表 t", redactor.restore(text));
+
+        String quoted = redactor.redactText("password is \"a b c\" and token: 'x y'");
+        Assertions.assertFalse(quoted.contains("a b c") || quoted.contains("x y"), quoted);
+        Assertions.assertTrue(quoted.matches("password is \"\\$\\{_CRED_\\d+_}\" and token: '\\$\\{_CRED_\\d+_}'"),
+                quoted);
+        String chinese = redactor.redactText("密码为“p 1”。");
+        Assertions.assertFalse(chinese.contains("p 1"), chinese);
+        Assertions.assertTrue(chinese.endsWith("”。"), chinese);
+    }
+
+    @Test
+    public void testRestoreConfigKeepsItValid() {
+        CredentialRedactor redactor = new CredentialRedactor();
+        String text = redactor.redactText("密码是 Pg\"Pa\\ss1，token 是 a\\b");
+        String password = text.substring(text.indexOf("${"), text.indexOf("}") + 1);
+        String token = text.substring(text.lastIndexOf("${"), text.lastIndexOf("}") + 1);
+        String config = "source { Jdbc { password = \"" + password + "\", note = \"say \\\"hi\\\" " + password
+                + "\", token = " + token + " } }";
+        String restored = redactor.restoreConfig(config);
+        com.typesafe.config.Config parsed = com.typesafe.config.ConfigFactory.parseString(restored);
+        Assertions.assertEquals("Pg\"Pa\\ss1", parsed.getString("source.Jdbc.password"));
+        Assertions.assertEquals("say \"hi\" Pg\"Pa\\ss1", parsed.getString("source.Jdbc.note"));
+        Assertions.assertEquals("a\\b", parsed.getString("source.Jdbc.token"));
+        // Without credentials nothing changes
+        Assertions.assertEquals("a = \"${x}\"", new CredentialRedactor().restoreConfig("a = \"${x}\""));
+    }
 }

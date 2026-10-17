@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-import { defineComponent, nextTick, PropType, ref, watch } from 'vue'
+import { defineComponent, nextTick, PropType, reactive, ref, watch } from 'vue'
 import {
   NButton,
   NCollapse,
@@ -33,7 +33,7 @@ import { useI18n } from 'vue-i18n'
 import { renderMarkdown } from './markdown'
 import styles from './index.module.scss'
 import type { AiSession } from './use-ai-session'
-import type { ChatMessage, HttpResponseSample } from './types'
+import type { ChatMessage, HttpResponseSample, ProgressStep } from './types'
 
 const props = {
   session: {
@@ -58,6 +58,13 @@ const props = {
   height: {
     type: String as PropType<string>,
     default: 'calc(100vh - 220px)'
+  },
+  /**
+   * Rendered between the title and the messages, e.g. the source and sink selection
+   */
+  header: {
+    type: Function as PropType<() => any>,
+    default: undefined
   }
 }
 
@@ -110,6 +117,226 @@ export default defineComponent({
       }
     }
 
+    // The expanded progress of the messages and the expanded steps
+    const expandedProgress = reactive<Record<number, boolean>>({})
+    const expandedSteps = reactive<Record<string, boolean>>({})
+
+    const formatMillis = (millis?: number) =>
+      millis === undefined || millis === null
+        ? ''
+        : millis < 1000
+        ? millis + 'ms'
+        : (millis / 1000).toFixed(1) + 's'
+
+    const stepTitle = (step: ProgressStep) => {
+      const args = step.args || {}
+      switch (step.kind) {
+        case 'thinking':
+          return t('project.node.ai_status_thinking')
+        case 'selection':
+          return t(
+            args.role === 'sink'
+              ? 'project.node.ai_step_selection_sink'
+              : 'project.node.ai_step_selection_source',
+            { target: args.target }
+          )
+        case 'connector_info':
+          return t('project.node.ai_status_connector', {
+            name: args.name,
+            type: args.type
+          })
+        case 'list_connectors':
+          return t('project.node.ai_status_list_connectors')
+        case 'check_config':
+          return t('project.node.ai_step_check_config')
+        case 'list_connections':
+          return t('project.node.ai_status_list_connections_registered')
+        case 'browse':
+          return t('project.node.ai_status_browse', { target: args.target })
+        case 'describe':
+          return t('project.node.ai_status_describe', { target: args.target })
+        case 'http_sample':
+          return t('project.node.ai_status_http_sample', {
+            target: args.target
+          })
+        case 'validate_local':
+          return t('project.node.ai_status_validating_local')
+        case 'validate_engine':
+          return t('project.node.ai_status_validating_engine')
+        case 'fixing':
+          return t('project.node.ai_status_fixing', { n: args.round })
+        default:
+          return String(args.name || step.kind)
+      }
+    }
+
+    const validationSummary = (result: Record<string, any>) => {
+      if (result.skipped) {
+        return t('project.node.ai_step_skipped', {
+          reason: result.reason || ''
+        })
+      }
+      if (result.errors > 0) {
+        return t('project.node.ai_step_errors', {
+          errors: result.errors,
+          warnings: result.warnings || 0
+        })
+      }
+      if (result.warnings > 0) {
+        return t('project.node.ai_step_warnings', { n: result.warnings })
+      }
+      return t('project.node.ai_step_passed')
+    }
+
+    const stepSummary = (step: ProgressStep) => {
+      const result = step.result || {}
+      if (step.state === 'running') return ''
+      if (step.state === 'error' && result.message) return result.message
+      switch (step.kind) {
+        case 'selection':
+          return result.newTable
+            ? t('project.node.ai_step_new_table')
+            : t('project.node.ai_step_fields_from_selection', {
+                n: result.fields || 0
+              })
+        case 'connector_info':
+          return t('project.node.ai_step_options', {
+            required: result.required || 0,
+            optional: result.optional || 0
+          })
+        case 'list_connectors':
+          return t('project.node.ai_step_connectors', {
+            sources: result.sources || 0,
+            transforms: result.transforms || 0,
+            sinks: result.sinks || 0
+          })
+        case 'check_config':
+        case 'validate_local':
+        case 'validate_engine':
+          return validationSummary(result)
+        case 'list_connections':
+          return t('project.node.ai_step_connections', { n: result.count || 0 })
+        case 'browse':
+          return result.count
+            ? t('project.node.ai_step_objects', { n: result.count })
+            : t('project.node.ai_step_nothing_listed')
+        case 'describe':
+          if (!result.fields) {
+            return result.message || t('project.node.ai_step_no_fields')
+          }
+          return result.sensitive
+            ? t('project.node.ai_step_fields_sensitive', {
+                n: result.fields,
+                sensitive: result.sensitive
+              })
+            : t('project.node.ai_step_fields', { n: result.fields })
+        case 'http_sample':
+          return t('project.node.ai_step_http', {
+            status: result.status,
+            n: result.fields || 0
+          })
+        case 'fixing':
+          return result.generated
+            ? t('project.node.ai_step_fixed')
+            : t('project.node.ai_step_not_fixed')
+        default:
+          return step.state === 'error' ? t('project.node.ai_step_failed') : ''
+      }
+    }
+
+    const stepIcon = (step: ProgressStep) =>
+      step.state === 'running'
+        ? '⋯'
+        : step.state === 'ok'
+        ? '✓'
+        : step.state === 'warn'
+        ? '⚠'
+        : '✗'
+
+    const renderSteps = (message: ChatMessage) => {
+      const steps = message.steps || []
+      const warnings = steps.filter((step) => step.state === 'warn').length
+      const errors = steps.filter((step) => step.state === 'error').length
+      // The fixing steps contain other steps, they are not counted twice
+      const millis = steps
+        .filter((step) => step.kind !== 'fixing')
+        .reduce((total, step) => total + (step.millis || 0), 0)
+      const expanded = message.streaming || expandedProgress[message.id]
+      return (
+        <div class={styles.steps}>
+          <div
+            class={styles['steps-summary']}
+            onClick={() =>
+              (expandedProgress[message.id] = !expandedProgress[message.id])
+            }
+          >
+            {(expanded ? '▾ ' : '▸ ') +
+              t('project.node.ai_steps_summary', {
+                n: steps.length,
+                time: formatMillis(millis)
+              })}
+            {warnings > 0 && (
+              <span class={styles['step-warn']}>
+                {' · ' + t('project.node.ai_steps_warnings', { n: warnings })}
+              </span>
+            )}
+            {errors > 0 && (
+              <span class={styles['step-error']}>
+                {' · ' + t('project.node.ai_steps_errors', { n: errors })}
+              </span>
+            )}
+          </div>
+          {expanded &&
+            steps.map((step) => {
+              const key = message.id + '-' + step.id
+              const summary = stepSummary(step)
+              const hasDetails = !!step.details?.length
+              return (
+                <div key={key} class={styles.step}>
+                  <div
+                    class={[
+                      styles['step-line'],
+                      hasDetails ? styles.clickable : ''
+                    ]}
+                    onClick={() =>
+                      hasDetails && (expandedSteps[key] = !expandedSteps[key])
+                    }
+                  >
+                    <span class={styles['step-' + step.state]}>
+                      {stepIcon(step)}
+                    </span>{' '}
+                    {stepTitle(step)}
+                    {summary && (
+                      <span
+                        class={
+                          step.state === 'error'
+                            ? styles['step-error']
+                            : step.state === 'warn'
+                            ? styles['step-warn']
+                            : styles['step-summary']
+                        }
+                      >
+                        {' — ' + summary}
+                      </span>
+                    )}
+                    {step.state !== 'running' && step.millis ? (
+                      <span class={styles['step-time']}>
+                        {' · ' + formatMillis(step.millis)}
+                      </span>
+                    ) : null}
+                  </div>
+                  {hasDetails && expandedSteps[key] && (
+                    <pre class={styles['step-details']}>
+                      {step.details!.join('\n')}
+                    </pre>
+                  )}
+                </div>
+              )
+            })}
+        </div>
+      )
+    }
+
     const formatTime = (time?: number) =>
       time ? format(new Date(time), 'yyyy-MM-dd HH:mm') : ''
 
@@ -138,6 +365,12 @@ export default defineComponent({
       }
       if (status === 'http_sample') {
         return t('project.node.ai_status_http_sample', { target: detail || '' })
+      }
+      if (status === 'list_connections') {
+        return t('project.node.ai_status_list_connections_registered')
+      }
+      if (status === 'describe' || status === 'browse') {
+        return t('project.node.ai_status_' + status, { target: detail || '' })
       }
       return t('project.node.ai_status_' + status)
     }
@@ -176,6 +409,28 @@ export default defineComponent({
                 {(sample.truncated
                   ? t('project.node.ai_http_response_truncated') + ' '
                   : '') + t('project.node.ai_http_response_note')}
+              </div>
+            </NCollapseItem>
+          ))}
+        </NCollapse>
+      ) : null
+
+    const renderSamples = (message: ChatMessage) =>
+      message.samples?.length ? (
+        <NCollapse class={styles['http-responses']}>
+          {message.samples.map((sample, index) => (
+            <NCollapseItem
+              key={'sample-' + index}
+              name={'sample-' + index}
+              title={t('project.node.ai_sample_title', {
+                target: sample.title
+              })}
+            >
+              <pre class={styles['http-response-body']}>
+                {sample.samples.join('\n\n')}
+              </pre>
+              <div class={styles['http-response-note']}>
+                {t('project.node.ai_sample_note')}
               </div>
             </NCollapseItem>
           ))}
@@ -255,6 +510,19 @@ export default defineComponent({
         message.role === 'user' ? styles.user : styles.assistant,
         message.reverted ? styles.reverted : ''
       ]
+      if (message.note) {
+        return (
+          <div class={styles.note} key={message.id}>
+            {message.content}
+            {message.userName && (
+              <span>
+                {' · '}
+                {message.userName} · {formatTime(message.time)}
+              </span>
+            )}
+          </div>
+        )
+      }
       if (message.role === 'user') {
         return (
           <div class={classes} key={message.id}>
@@ -278,18 +546,22 @@ export default defineComponent({
             ) : message.streaming ? (
               <NSpin size='small' />
             ) : null}
-            {message.statuses.length > 0 && (
-              <div class={styles.statuses}>
-                {message.statuses.map((item, index) => (
-                  <div key={index}>
-                    {(message.streaming && index === message.statuses.length - 1
-                      ? '⋯ '
-                      : '✓ ') + formatStatus(item.status, item.detail)}
+            {message.steps?.length
+              ? renderSteps(message)
+              : message.statuses.length > 0 && (
+                  <div class={styles.statuses}>
+                    {message.statuses.map((item, index) => (
+                      <div key={index}>
+                        {(message.streaming &&
+                        index === message.statuses.length - 1
+                          ? '⋯ '
+                          : '✓ ') + formatStatus(item.status, item.detail)}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                )}
             {renderHttpResponses(message)}
+            {renderSamples(message)}
             {message.error && (
               <div class={styles.error}>
                 {message.error === 'stopped'
@@ -367,6 +639,7 @@ export default defineComponent({
               </NPopconfirm>
             )}
           </div>
+          {props.header?.()}
           <div class={styles['chat-messages']} ref={list}>
             {state.loading ? (
               <div class={styles.welcome}>

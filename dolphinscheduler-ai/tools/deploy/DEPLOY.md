@@ -17,70 +17,100 @@
 
 # SeaTunnel AI 助手生产部署说明
 
-适用：DolphinScheduler 3.4.2，定制分支 `dev-3.4.2-ai-seatunnel`。部署包 `ds-ai-deploy-3.4.2.tar.gz` 包含以下全部功能，一次装好：
+适用版本：DolphinScheduler 3.4.2，定制分支 `dev-3.4.2-ai-seatunnel`。部署包 `ds-ai-deploy-3.4.2.tar.gz` 一次装好以下全部功能：
 
-- AI 生成 / 修改 SeaTunnel 配置（三栏布局、校验与自动修复、对比确认、回撤 / 重做）
-- 聊天记录按任务保存、清空聊天记录；只读查看节点（如工作流实例的“当前节点设置”）时也显示三栏和历史对话
+- AI 生成 / 修改 SeaTunnel 配置：三栏布局、校验与自动修复、对比确认、回撤 / 重做
+- 聊天记录按任务保存、清空；只读查看节点时也显示三栏和历史对话
 - Http 接口字段推断、查看接口响应原文
+- **SeaTunnel 配置（连接管理）**：在安全中心维护 Kafka / MySQL / PostgreSQL / ClickHouse / HTTP / S3 连接，并按用户授权。在 AI 助手顶部选择来源和目标后，AI 会自动读取字段并做对齐。脚本中的密码以 `${stconn.<标识>.<字段>}` 引用，任务运行时由 master 注入。
 
-**只改 api-server**。master / worker / alert 不用替换任何文件，也不用重启。
+## 一、改动范围
 
-## 一、部署包内容
+| 服务 | 改动 | 是否需要重启 |
+|---|---|---|
+| api-server | 42 个 jar（新增 25 个第三方 jar、升级 14 个 AWS SDK jar，以及 ai / api / dao 三个 jar）、ui、`application.yaml` 增加 `ai:` 配置、`common.properties` 增加密钥 | 是 |
+| master-server | `dolphinscheduler-master / dao / task-executor-3.4.2.jar`（运行时注入连接密码）、`common.properties` 增加密钥 | 是 |
+| worker-server | `dolphinscheduler-worker / task-executor-3.4.2.jar`（服务日志中隐藏注入的密码） | 是 |
+| alert-server | 无 | 否 |
+| 数据库 | 新增 3 张表，由 DBA 手动执行 SQL | — |
+
+> master、worker 和 api-server 要一起升级。只升级 api-server 时，使用了 `${stconn...}` 引用的任务在旧 master 上运行会失败（密码不会被替换）。
+
+## 二、部署包内容
 
 | 文件 | 说明 |
 |---|---|
-| `install.sh` | 安装脚本：检查 → 备份 → 删除旧 jar → 拷入新 jar → 替换 ui → 追加配置 → 校验；任一步失败自动还原。**不连接、不修改数据库** |
+| `install.sh` | 安装脚本：检查 → 备份 → 安装 → 校验，任一步失败自动还原。**不连接、不修改数据库** |
 | `rollback.sh` | 回滚脚本：从备份还原 libs、ui、application.yaml |
-| `api-server-libs/`（39 个 jar） | 22 个新增第三方 jar + 14 个升级的 AWS SDK jar（2.17.282 → 2.42.4）+ `dolphinscheduler-ai/api/dao-3.4.2.jar` |
-| `remove-from-api-server-libs.txt` | 要删除的 14 个旧版 AWS SDK jar |
-| `ui/dolphinscheduler-ui-3.4.2-ai.tar.gz` | 新前端（入口文件 `assets/index.7cf1cebb.js`） |
+| `api-server-libs/`、`master-server-libs/`、`worker-server-libs/` | 各服务的 jar |
+| `remove-from-api-server-libs.txt` | api-server 中要删除的 14 个旧版 AWS SDK jar |
+| `ui/dolphinscheduler-ui-3.4.2-ai.tar.gz` | 新前端（入口文件 `assets/index.aba08b18.js`） |
 | `application-ai.yaml` | `ai:` 配置片段 |
-| `ai_conversation_mysql.sql` / `ai_conversation_postgresql.sql` | 聊天记录表 `t_ds_ai_conversation` 的建表语句，由 DBA 手动执行 |
-| `seatunnel-metadata-exporter/` | connector 元数据导出工具（安装了更多 connector 时用） |
+| `ai_tables_mysql.sql` / `ai_tables_postgresql.sql` | 新建 3 张表（`CREATE TABLE IF NOT EXISTS`，不改已有表） |
+| `ai_conversation_add_context_*.sql` | **只用于**之前已经建过旧版 `t_ds_ai_conversation` 的环境（例如测试环境），补 `context` 列 |
+| `seatunnel-metadata-exporter/` | connector 元数据导出工具 |
 | `SHA256SUMS` | 文件校验和，安装脚本会自动校验 |
 
-## 二、前置条件
+## 三、前置条件
 
-| 项 | 要求 | 检查方法 |
-|---|---|---|
-| Java | api-server 使用 **JDK 17+**（要 JDK，JRE 下引擎校验会被跳过） | 安装脚本自动检查 `bin/env/dolphinscheduler_env.sh` 中的 `JAVA_HOME` |
-| SeaTunnel | api-server 机器上安装 SeaTunnel 2.3.13（用于引擎校验，没有也能用） | `ls <SEATUNNEL_HOME>/starter/seatunnel-starter.jar` |
-| Bedrock 权限 | api-server 所在 EC2 的实例角色可以调用 Claude（见第四节） | 第四节的 `aws bedrock-runtime converse` 命令 |
-| 数据库 | 有建表权限的账号 | — |
-| 网络 | api-server 能访问 `bedrock-runtime.us-east-1.amazonaws.com:443` | 第四节的验证命令能返回即可 |
+| 项 | 要求 |
+|---|---|
+| Java | api-server 使用 **JDK 17+**（需要 JDK，用 JRE 时会跳过引擎校验）；master / worker 的 Java 版本不变 |
+| SeaTunnel | api-server 所在机器安装 SeaTunnel 2.3.13，用于引擎校验，可选 |
+| Bedrock | api-server 所在 EC2 的实例角色能调用 Claude，见第五节 |
+| 网络 | api-server 能访问 Bedrock（`bedrock-runtime.us-east-1.amazonaws.com:443`），以及要在 AI 助手中浏览的 Kafka、数据库、S3、HTTP 接口；worker 能访问作业实际要读写的地址 |
+| 工具 | 服务器上有 `unzip`，用于检查 jar 版本冲突；没有时脚本给出提示，跳过这项检查 |
 
-## 三、部署步骤
+## 四、部署步骤
 
-以 `DS_HOME=/opt/dolphinscheduler-3.4.2`、SeaTunnel 安装在 `/opt/seatunnel-2.3.13` 为例。
+以 `DS_HOME=/opt/dolphinscheduler-3.4.2`、SeaTunnel 安装在 `/opt/seatunnel-2.3.13` 为例。api / master / worker 不在同一台机器时，**每台机器上都执行第 1、4、5、6 步**，用 `--components` 指定该机器上的服务。
 
-**1. 上传并解压**
-
-```bash
-tar -xzf ds-ai-deploy-3.4.2.tar.gz
-cd ds-ai-deploy
-```
-
-**2. 预检查（不做任何修改）**
+**1. 上传、解压、预检查（不做任何修改）**
 
 ```bash
+tar -xzf ds-ai-deploy-3.4.2.tar.gz && cd ds-ai-deploy
 ./install.sh /opt/dolphinscheduler-3.4.2 --seatunnel-home /opt/seatunnel-2.3.13 --dry-run
+# 分机器部署时，例如 worker 机器：./install.sh /opt/dolphinscheduler-3.4.2 --components worker --dry-run
 ```
 
-所有项为 `[OK]` 或可接受的 `[WARN]` 后再继续。此时 api-server 还在运行，“the api server is running” 这一项报错是正常的，停服后会通过。
+此时服务还在运行，“is running” 一项报错是正常的，停服后会通过。其余项应为 `[OK]` 或可接受的 `[WARN]`。
 
-**3. 建表（手动执行 SQL）**
+**2. 建表（DBA 手动执行，只需一次）**
 
-部署脚本不执行任何 SQL。请按元数据库类型，用你们的数据库工具在 DolphinScheduler 元数据库中**手动执行**对应文件（只需一次，语句为 `CREATE TABLE IF NOT EXISTS`，表已存在会跳过）：
+在 DolphinScheduler 元数据库中执行 `ai_tables_mysql.sql` 或 `ai_tables_postgresql.sql`（二选一）。执行后确认：
 
-- MySQL：`ai_conversation_mysql.sql`
-- PostgreSQL：`ai_conversation_postgresql.sql`
+```sql
+SELECT COUNT(*) FROM t_ds_ai_conversation;
+SELECT COUNT(*) FROM t_ds_seatunnel_connection;
+SELECT COUNT(*) FROM t_ds_relation_seatunnel_connection_user;
+```
 
-只新建 `t_ds_ai_conversation` 一张表，不修改已有表和数据。执行后确认表已存在：`SELECT COUNT(*) FROM t_ds_ai_conversation;`
+如果之前装过测试版（`t_ds_ai_conversation` 已存在、但没有 `context` 列），再执行一次 `ai_conversation_add_context_*.sql`。
 
-**4. 停止 api-server**
+**3. 设置连接密钥（api-server 和 master 必须相同）**
+
+连接的密码、证书用 AES 加密后存入数据库。api-server 加密，master 解密，所以两边要用同一个密钥。生成一个随机值：
+
+```bash
+openssl rand -base64 32
+```
+
+追加到 `api-server/conf/common.properties`，以及**每一台** master 的 `master-server/conf/common.properties`：
+
+```properties
+seatunnel.connection.encryption.key=<上面生成的值>
+```
+
+- 不设置也能运行，但只会用内置密钥做混淆，安全性低，脚本会给出 `[WARN]`。
+- 设置后**不要再修改**，否则已保存的连接密码无法解密，需要在页面上重新填写。
+- 同一台机器上 api-server 和 master 的密钥不一致时，脚本会报错。
+
+**4. 停止服务**
 
 ```bash
 /opt/dolphinscheduler-3.4.2/bin/dolphinscheduler-daemon.sh stop api-server
+/opt/dolphinscheduler-3.4.2/bin/dolphinscheduler-daemon.sh stop master-server
+/opt/dolphinscheduler-3.4.2/bin/dolphinscheduler-daemon.sh stop worker-server
 ```
 
 **5. 安装**
@@ -89,44 +119,31 @@ cd ds-ai-deploy
 ./install.sh /opt/dolphinscheduler-3.4.2 --seatunnel-home /opt/seatunnel-2.3.13
 ```
 
-脚本会：
-1. 再次执行全部检查，有错误则不做任何修改；
-2. 备份 `api-server/libs`、`api-server/ui`、`api-server/conf/application.yaml` 到 `api-server/ai-backup-<时间>/`；
-3. 删除 14 个旧版 AWS SDK jar，拷入 39 个 jar（覆盖 `dolphinscheduler-api/dao-3.4.2.jar`）；
-4. 替换 `api-server/ui`；
-5. 在 `application.yaml` 末尾追加 `ai:` 配置（`ai.enabled: true`，`ai.seatunnel.home` 设为 `--seatunnel-home` 的值）；如果已有 `ai:` 段则不改；
-6. 校验已安装的文件；任一步失败会自动还原备份。
+脚本会做这几件事：
+1. 再次执行全部检查，有错误就不做任何修改。检查内容包括：
+   - 包完整性、版本是否为 3.4.2、服务是否已停止；
+   - JDK 17、所需的 jar、密钥；
+   - **jar 版本冲突**：按 jar 内的 Maven 坐标查找手动放进去的其他版本 jar，例如别的版本的 langchain4j。发现冲突时报错，确认后加 `--remove-conflicts` 删除，删除的 jar 保留在备份中。
+2. 备份各服务的 `libs`，以及 api-server 的 `ui` 和 `application.yaml`，备份到 `DS_HOME/ai-backup-<时间>/`。
+3. api-server：删除 14 个旧版 AWS SDK jar，拷入新 jar，替换 ui，在 `application.yaml` 末尾追加 `ai:` 配置（已有 `ai:` 段时不改）。
+4. master / worker：拷入新 jar，同名文件直接覆盖。
+5. 校验装好的文件。任一步失败会自动还原。
 
-`datasync-2.17.282.jar`、`netty-nio-client-2.17.282.jar` 会保留，属于正常情况。
+`datasync-2.17.282.jar`、`netty-nio-client-2.17.282.jar` 会保留，这是正常的。
 
-**6. 检查配置**（可选）
+**6. 启动服务**
 
-打开 `api-server/conf/application.yaml`，确认末尾的 `ai:` 段，常用项：
-
-```yaml
-ai:
-  enabled: true
-  rate-limit-per-user-per-minute: 10   # 每个用户每分钟最多请求数
-  llm:
-    region: us-east-1
-    model: us.anthropic.claude-sonnet-5-5
-    fast-model: us.anthropic.claude-haiku-5-5
-  seatunnel:
-    home: "/opt/seatunnel-2.3.13"
-  http-sample:
-    denied-hosts: []                   # 不允许 AI 调用的内网地址，例如 [10.0.1.0/24]
-```
-
-**7. 启动 api-server**
+先启动 master 和 worker，再启动 api-server：
 
 ```bash
+/opt/dolphinscheduler-3.4.2/bin/dolphinscheduler-daemon.sh start master-server
+/opt/dolphinscheduler-3.4.2/bin/dolphinscheduler-daemon.sh start worker-server
 /opt/dolphinscheduler-3.4.2/bin/dolphinscheduler-daemon.sh start api-server
-tail -f /opt/dolphinscheduler-3.4.2/api-server/logs/dolphinscheduler-api.log
 ```
 
-日志中应出现 `AI assistant uses AWS Bedrock in us-east-1, model: us.anthropic.claude-sonnet-5-5`，并且没有 `NoSuchMethodError`、`ClassNotFoundException`。
+api-server 日志中应出现 `AI assistant uses AWS Bedrock in us-east-1`，并且没有 `NoSuchMethodError` 或 `ClassNotFoundException`。
 
-## 四、Bedrock 权限（部署前由 AWS 管理员完成）
+## 五、Bedrock 权限（部署前由 AWS 管理员完成）
 
 给 api-server 所在 EC2 的实例角色（例如 `<实例角色名>`，账号 `<账号ID>`）添加内联策略：
 
@@ -146,52 +163,58 @@ tail -f /opt/dolphinscheduler-3.4.2/api-server/logs/dolphinscheduler-api.log
 }
 ```
 
-并在 Bedrock 控制台（us-east-1）→ Model access 中开通 Claude Sonnet 5.5 和 Claude Haiku 5.5。在 api-server 机器上验证：
+然后在 Bedrock 控制台（us-east-1）的 Model access 中开通 Claude Sonnet 5.5 和 Claude Haiku 5.5。验证：
 
 ```bash
 aws bedrock-runtime converse --region us-east-1 --model-id us.anthropic.claude-sonnet-5-5 \
   --messages '[{"role":"user","content":[{"text":"Reply OK"}]}]'
 ```
 
-返回 `OK` 即可。如果报 `not authorized to perform: bedrock:InvokeModelWithResponseStream`，说明策略还没加上或没生效。
+## 六、部署后验证
 
-## 五、部署后验证
-
-用浏览器无痕窗口打开（避免缓存旧前端）：
+用浏览器无痕窗口打开，避免缓存旧前端：
 
 | # | 操作 | 预期 |
 |---|---|---|
-| 1 | 打开工作流定义，新建 / 编辑一个 SeaTunnel 节点 | 弹窗为三栏：配置、AI 对话、编辑器 |
-| 2 | 发送“把 MySQL（host:3306，库 shop，用户 etl）的 orders 表同步到 Console” | 显示查询参数、本地校验、引擎校验进度；右侧出现对比视图，校验“通过” |
-| 3 | 点“接受” | 脚本写入编辑器 |
-| 4 | 关闭弹窗再打开 | 显示“以下为历史对话”；“清空聊天记录”可用 |
-| 5 | 发送带完整内网接口地址的需求，例如“把 http://<接口>/xxx 同步到 Console” | 进度出现“调用接口获取字段”，回复下方可展开“响应原文”，生成的 schema 与接口一致 |
-| 6 | 打开该工作流的一个实例，查看这个 SeaTunnel 节点 | 同样是三栏，显示历史对话，输入框为“只读查看”，没有“清空聊天记录”按钮 |
-| 7 | 保存节点并运行工作流 | 作业正常执行（与 AI 无关的原有功能不受影响） |
+| 1 | 打开 SeaTunnel 节点 | 三栏：配置 / AI 对话 / 编辑器 |
+| 2 | 在对话中描述一个同步需求 | 有进度和对比视图，校验结果为“通过”，可以接受 |
+| 3 | 关闭弹窗再打开 | 显示历史对话 |
+| 4 | 安全中心 → SeaTunnel配置 → 创建连接（例如 Kafka、PG），点“测试连接”。Kafka 集群按前缀授权消费者组时，填写“消费者组前缀” | 提示“连接成功” |
+| 5 | 用户管理 → 授权 → SeaTunnel连接，授权给一个普通用户 | 该用户在 AI 助手顶部能看到“数据来源 / 写入目标” |
+| 6 | 在 AI 助手顶部选 Kafka 集群 → topic，选 PG → 表（或勾选“自动新建表”） | 显示“字段 N 个”，点开能看到字段和数据样例 |
+| 7 | 发送“把选中的 topic 同步到选中的表” | AI 不再询问地址和账号；脚本中的密码为 `"${stconn.<标识>.password}"`；字段按名称和类型对齐 |
+| 7b | 不用选择栏，直接发送“把 <连接标识> 的 <topic> 同步到 <连接标识> 的 <表>” | 进度中显示“读取字段 …”，AI 自己取样，不要求提供样例；回复下方的“数据样例”中敏感字段已遮掩 |
+| 8 | 保存并运行该任务 | 作业成功、数据写入；任务日志和 worker 服务日志中看不到真实密码 |
+| 9 | 打开工作流实例查看该节点 | 三栏，只读，显示历史对话和选择结果 |
 
-## 六、回滚
+## 七、回滚
 
-**方式一：完全回滚**（恢复部署前的 libs、ui、application.yaml）
+**方式一：完全回滚**，恢复到第一次执行 `install.sh` 之前的 libs、ui、application.yaml：
 
 ```bash
-/opt/dolphinscheduler-3.4.2/bin/dolphinscheduler-daemon.sh stop api-server
-./rollback.sh /opt/dolphinscheduler-3.4.2                 # 默认恢复到首次安装 AI 助手之前的状态（即使安装过多次）
-# 或指定备份：./rollback.sh /opt/dolphinscheduler-3.4.2 /opt/dolphinscheduler-3.4.2/api-server/ai-backup-20261015160000
-/opt/dolphinscheduler-3.4.2/bin/dolphinscheduler-daemon.sh start api-server
+# 停止 api-server / master-server / worker-server 后执行
+./rollback.sh /opt/dolphinscheduler-3.4.2
+# 或指定备份：./rollback.sh /opt/dolphinscheduler-3.4.2 /opt/dolphinscheduler-3.4.2/ai-backup-20261017100000
+# 再启动服务
 ```
 
-**方式二：只关闭 AI**：把 `application.yaml` 中 `ai.enabled` 改为 `false` 并重启 api-server，页面恢复为原来的两栏，不会创建任何 AI 组件。
+注意：回滚后，脚本中使用了 `${stconn...}` 引用的 SeaTunnel 任务无法运行。需要先把这些任务改回明文或任务参数，再回滚。
 
-`t_ds_ai_conversation` 表回滚后可以保留，不影响 DolphinScheduler。备份目录确认无需回滚后可以删除。
+**方式二：只关闭 AI**：把 `application.yaml` 中的 `ai.enabled` 改为 `false`，然后重启 api-server。页面恢复为两栏；已有任务中的 `${stconn...}` 引用仍由 master 正常注入。
 
-## 七、常见问题
+新增的 3 张表回滚后可以保留，不影响 DolphinScheduler。
+
+## 八、常见问题
 
 | 现象 | 处理 |
 |---|---|
 | 预检查报 `package files do not match SHA256SUMS` | 部署包上传不完整，重新上传 |
-| 预检查报 Java 版本低于 17 | 修改 `bin/env/dolphinscheduler_env.sh` 中 api-server 使用的 `JAVA_HOME` 为 JDK 17 |
-| 启动报 AWS SDK 相关 `NoSuchMethodError` | `api-server/libs` 中仍有 2.17.282 的 AWS SDK 核心 jar，执行回滚后重新安装 |
-| 发消息报 `not authorized to perform: bedrock:...` | 按第四节加 IAM 权限，无需重启 |
-| 校验结果为“引擎校验：未执行” | `ai.seatunnel.home` 未配置或路径不对，或 api-server 运行在 JRE 上 |
-| 打开历史对话报表不存在 | 未执行第三步建表 |
-| 页面不是三栏 | `ai.enabled` 不是 `true`，或浏览器缓存了旧前端 |
+| 预检查报 `other versions of the jars to install exist` | 环境里有手动放进去的其他版本 jar。核对后加 `--remove-conflicts` 重新执行 |
+| 预检查报 `... differs between api-server and master-server` | 两边的 `seatunnel.connection.encryption.key` 不一致，改成相同的值 |
+| 任务失败：`SeaTunnel connection 'xxx' not found` | 连接被删除，或者 master 连接的不是同一个数据库 |
+| master 日志：`Failed to decrypt the SeaTunnel connection secrets` | master 和 api-server 的密钥不一致，或者保存连接后修改过密钥 |
+| AI 助手顶部没有“数据来源 / 写入目标” | 当前用户没有被授权任何连接（管理员能看到全部） |
+| 测试连接报 `... needs the AI assistant to be enabled` | Kafka / HTTP 连接的浏览依赖 AI 模块，需要 `ai.enabled: true` |
+| Kafka 读不到样例或作业报 `GroupAuthorizationException` | 连接没有填“消费者组前缀”，或账号没有该前缀的消费者组权限。读样例使用 `<前缀>-dolphinscheduler-ai-sample`，作业使用 `<前缀>-ds-<任务code>` |
+| 发消息报 `not authorized to perform: bedrock:...` | 按第五节加 IAM 权限，不需要重启 |
+| 启动报 AWS SDK 相关的 `NoSuchMethodError` | libs 中残留了旧版 AWS SDK jar，执行回滚后重新安装 |

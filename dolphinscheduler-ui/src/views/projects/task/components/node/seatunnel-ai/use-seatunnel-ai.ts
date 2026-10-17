@@ -15,7 +15,10 @@
  * limitations under the License.
  */
 
+import { useI18n } from 'vue-i18n'
 import { useAiSession } from '@/components/ai-assistant/use-ai-session'
+import type { AiSession } from '@/components/ai-assistant/use-ai-session'
+import { useConnectionContext } from './use-connection-context'
 import {
   deleteAiConversation,
   getAiConversation,
@@ -35,14 +38,31 @@ export function useSeatunnelAi(
   taskCode?: number,
   readonly = false
 ) {
+  const { t } = useI18n()
   const userStore = useUserStore()
   const query = taskCode
     ? { projectCode, taskCode, assistant: 'seatunnel' }
     : null
-  return useAiSession({
+  // eslint-disable-next-line prefer-const
+  let session: AiSession
+  // The optional source and sink connections, a change is noted in the conversation
+  const connections = useConnectionContext((role, summary) => {
+    const side =
+      role === 'SOURCE'
+        ? t('project.node.ai_context_source')
+        : t('project.node.ai_context_sink')
+    session.addNote(
+      summary
+        ? t('project.node.ai_context_changed', { role: side, summary })
+        : t('project.node.ai_context_cleared', { role: side })
+    )
+  })
+  session = useAiSession({
     url: '/ai/seatunnel/chat',
     buildBody: (userInput, history) => ({
       projectCode,
+      // E.g. the Kafka consumer group of the job is derived from the task
+      taskCode,
       history,
       userInput,
       currentScript: model.useCustom ? model.rawScript || '' : '',
@@ -51,7 +71,8 @@ export function useSeatunnelAi(
         deployMode: model.deployMode || '',
         runMode: model.runMode || '',
         master: model.master || ''
-      }
+      },
+      connections: connections.toContext()
     }),
     getScript: () => model.rawScript || '',
     setScript: (script: string) => {
@@ -62,10 +83,26 @@ export function useSeatunnelAi(
     readonly,
     persistence: query
       ? {
-          load: () => getAiConversation(query),
-          save: (messages) => saveAiConversation(query, messages),
+          load: async () => {
+            const conversation = await getAiConversation(query)
+            connections.apply(conversation.context)
+            return conversation
+          },
+          save: (messages) =>
+            saveAiConversation(query, messages, connections.toContext()),
           clear: () => deleteAiConversation(query)
         }
       : undefined
+  })
+  const loadSession = session.load
+  return Object.assign(session, {
+    connections,
+    /**
+     * Load the connections the user may use, then the saved conversation and selection of the task
+     */
+    load: async () => {
+      await connections.load()
+      await loadSession()
+    }
   })
 }

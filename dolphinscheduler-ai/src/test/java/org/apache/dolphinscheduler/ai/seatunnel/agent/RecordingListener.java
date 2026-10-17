@@ -27,6 +27,27 @@ class RecordingListener implements AgentEventListener {
 
     final StringBuilder deltas = new StringBuilder();
     final List<String> statuses = new ArrayList<>();
+    final List<AgentStep> started = new ArrayList<>();
+    final List<AgentStep> ended = new ArrayList<>();
+
+    @Override
+    public void onStepStart(AgentStep step) {
+        started.add(step);
+    }
+
+    @Override
+    public void onStepEnd(AgentStep step) {
+        ended.add(step);
+    }
+
+    /**
+     * @return kind:state of the ended steps, e.g. connector_info:ok
+     */
+    List<String> steps() {
+        List<String> result = new ArrayList<>();
+        ended.forEach(step -> result.add(step.kind() + ":" + step.state()));
+        return result;
+    }
     SeatunnelProposal proposal;
     String done;
     String error;

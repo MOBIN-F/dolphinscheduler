@@ -30,6 +30,7 @@ import Form from '@/components/form'
 import { useTask } from './use-task'
 import { useTaskNodeStore } from '@/store/project/task-node'
 import AiChatPanel from '@/components/ai-assistant/chat-panel'
+import SeatunnelContextBar from './seatunnel-ai/context-bar'
 import AiDiffPanel from '@/components/ai-assistant/diff-panel'
 import { useAiStatus } from '@/components/ai-assistant/use-ai-status'
 import { useSeatunnelAi } from './seatunnel-ai/use-seatunnel-ai'
@@ -114,6 +115,12 @@ const NodeDetail = defineComponent({
           t('project.node.ai_seatunnel_example_2'),
           t('project.node.ai_seatunnel_example_3')
         ]}
+        header={() => (
+          <SeatunnelContextBar
+            context={seatunnelAi.connections}
+            readonly={!!unref(readonly)}
+          />
+        )}
       />
     )
     const renderAiDiff = () => {

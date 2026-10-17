@@ -19,13 +19,14 @@ package org.apache.dolphinscheduler.ai.seatunnel.agent;
 
 import org.apache.dolphinscheduler.ai.config.AiProperties;
 import org.apache.dolphinscheduler.ai.security.CredentialRedactor;
+import org.apache.dolphinscheduler.ai.security.HostGuard;
+import org.apache.dolphinscheduler.ai.security.SensitiveData;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.URLEncoder;
-import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -33,7 +34,6 @@ import java.net.http.HttpTimeoutException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -62,10 +62,6 @@ public class HttpSampleFetcher {
     private static final Pattern PARAMETER = Pattern.compile("\\$\\{([^}]*)}");
     private static final Set<String> RESTRICTED_HEADERS =
             Set.of("connection", "content-length", "expect", "host", "upgrade");
-    /**
-     * The IPv6 address of the EC2 metadata service, a unique local address.
-     */
-    private static final List<String> BUILT_IN_DENIED_HOSTS = List.of("fd00:ec2::254");
 
     private static final int MAX_REDIRECTS = 2;
     private static final int MAX_TEXT_LINES = 3;
@@ -84,8 +80,7 @@ public class HttpSampleFetcher {
     private final Duration timeout;
     private final int maxResponseBytes;
     private final int maxCallsPerRequest;
-    private final List<String> deniedHosts;
-    private final boolean allowLoopback;
+    private final HostGuard hostGuard;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public HttpSampleFetcher(AiProperties.HttpSample properties) {
@@ -101,11 +96,7 @@ public class HttpSampleFetcher {
         this.timeout = timeout;
         this.maxResponseBytes = maxResponseBytes;
         this.maxCallsPerRequest = maxCallsPerRequest;
-        this.deniedHosts = new ArrayList<>(BUILT_IN_DENIED_HOSTS);
-        if (deniedHosts != null) {
-            this.deniedHosts.addAll(deniedHosts);
-        }
-        this.allowLoopback = allowLoopback;
+        this.hostGuard = new HostGuard(deniedHosts, allowLoopback);
         this.client = HttpClient.newBuilder()
                 .connectTimeout(timeout)
                 .followRedirects(HttpClient.Redirect.NEVER)
@@ -158,7 +149,6 @@ public class HttpSampleFetcher {
      * @return the result for the LLM, errors are returned as text
      */
     public String fetch(JsonNode arguments, ToolContext context) {
-        CredentialRedactor redactor = context.redactor();
         if (context.countHttpCall() > maxCallsPerRequest) {
             return "Not called: at most " + maxCallsPerRequest + " HTTP calls per request. Write the config with the "
                     + "fields you already know, or ask the user for a sample response.";
@@ -167,12 +157,12 @@ public class HttpSampleFetcher {
         if (!method.equals("GET") && !method.equals("POST")) {
             return "Not called: only GET and POST are supported.";
         }
-        String url = redactor.restore(arguments.path("url").asText().trim());
-        Map<String, String> headers = restore(arguments.path("headers"), redactor);
-        Map<String, String> params = restore(arguments.path("params"), redactor);
+        String url = context.resolve(arguments.path("url").asText().trim());
+        Map<String, String> headers = restore(arguments.path("headers"), context);
+        Map<String, String> params = restore(arguments.path("params"), context);
         JsonNode bodyNode = arguments.path("body");
         String body = bodyNode.isMissingNode() || bodyNode.isNull() ? null
-                : redactor.restore(bodyNode.isTextual() ? bodyNode.asText() : bodyNode.toString());
+                : context.resolve(bodyNode.isTextual() ? bodyNode.asText() : bodyNode.toString());
 
         Set<String> undefined = new LinkedHashSet<>();
         collectParameters(url, undefined);
@@ -184,9 +174,11 @@ public class HttpSampleFetcher {
                     + "their values, or use sample values (e.g. a date) in the arguments of this call.";
         }
         try {
-            return redactor.redactKnown(send(method, buildUri(url, params), headers, body, context));
+            String result = context.hide(send(method, buildUri(url, params), headers, body, context));
+            context.report(report(result));
+            return result;
         } catch (IllegalArgumentException e) {
-            return redactor.redactKnown("Not called: invalid request, " + e.getMessage());
+            return context.hide("Not called: invalid request, " + e.getMessage());
         }
     }
 
@@ -269,6 +261,21 @@ public class HttpSampleFetcher {
     }
 
     /**
+     * @return the progress step of a call: the status and the number of JSON fields, or the reason it failed
+     */
+    static StepReport report(String result) {
+        Matcher status = Pattern.compile("^HTTP (\\d{3})").matcher(result);
+        if (!status.find()) {
+            return StepReport.error(result.split("\n")[0]);
+        }
+        int code = Integer.parseInt(status.group(1));
+        long fields = result.lines().filter(line -> line.startsWith("$")).count();
+        Map<String, Object> values = Map.of("status", code, "fields", fields);
+        return code >= 200 && code < 300 ? StepReport.ok(values, List.of())
+                : new StepReport(AgentStep.ERROR, values, List.of());
+    }
+
+    /**
      * @return why the URI must not be called, or null if allowed
      */
     String checkTarget(URI uri, Set<String> allowedHosts) {
@@ -284,21 +291,15 @@ public class HttpSampleFetcher {
             return "the host " + hostKey + " is not given by the user. Only the addresses the user wrote in the "
                     + "conversation or in the script can be called, ask the user for the full URL of the API.";
         }
-        String host = hostName(hostKey);
-        InetAddress[] addresses;
-        try {
-            addresses = InetAddress.getAllByName(host);
-        } catch (UnknownHostException e) {
-            return "unknown host " + host + " (the api-server can not resolve it).";
-        }
-        for (InetAddress address : addresses) {
-            if ((!allowLoopback && (address.isLoopbackAddress() || address.isAnyLocalAddress()))
-                    || address.isLinkLocalAddress() || address.isMulticastAddress()
-                    || deniedHosts.stream().anyMatch(entry -> isDenied(entry, host, address))) {
-                return "the address of " + host + " is not allowed to be called.";
-            }
-        }
-        return null;
+        String denied = hostGuard.checkAddress(hostName(hostKey));
+        return denied == null ? null : denied + ".";
+    }
+
+    /**
+     * @return the address checks, shared with the other tools connecting to the addresses the user gave
+     */
+    public HostGuard hostGuard() {
+        return hostGuard;
     }
 
     private String describeResponse(int status, String contentType, String body, boolean truncated) {
@@ -350,14 +351,14 @@ public class HttpSampleFetcher {
         return method.isEmpty() ? "GET" : method;
     }
 
-    private static Map<String, String> restore(JsonNode node, CredentialRedactor redactor) {
+    private static Map<String, String> restore(JsonNode node, ToolContext context) {
         Map<String, String> values = new LinkedHashMap<>();
         if (node.isObject()) {
             Iterator<Map.Entry<String, JsonNode>> entries = node.fields();
             while (entries.hasNext()) {
                 Map.Entry<String, JsonNode> entry = entries.next();
                 JsonNode value = entry.getValue();
-                values.put(entry.getKey(), redactor.restore(value.isTextual() ? value.asText() : value.toString()));
+                values.put(entry.getKey(), context.resolve(value.isTextual() ? value.asText() : value.toString()));
             }
         }
         return values;
@@ -434,33 +435,7 @@ public class HttpSampleFetcher {
      * @param entry a host name (also matches the sub domains), an IP or a CIDR
      */
     static boolean isDenied(String entry, String host, InetAddress address) {
-        String value = entry.trim().toLowerCase(Locale.ROOT);
-        if (value.isEmpty()) {
-            return false;
-        }
-        boolean literal = value.matches("[0-9.]+(/\\d+)?") || value.contains(":");
-        if (!literal) {
-            String name = host.toLowerCase(Locale.ROOT);
-            return name.equals(value) || name.endsWith("." + value);
-        }
-        try {
-            String[] parts = value.split("/");
-            byte[] network = InetAddress.getByName(parts[0]).getAddress();
-            byte[] target = address.getAddress();
-            if (network.length != target.length) {
-                return false;
-            }
-            int bits = parts.length > 1 ? Integer.parseInt(parts[1]) : network.length * 8;
-            for (int i = 0; i < network.length && bits > 0; i++, bits -= 8) {
-                int mask = bits >= 8 ? 0xFF : (0xFF << (8 - bits)) & 0xFF;
-                if ((network[i] & mask) != (target[i] & mask)) {
-                    return false;
-                }
-            }
-            return true;
-        } catch (UnknownHostException | NumberFormatException e) {
-            return false;
-        }
+        return HostGuard.isDenied(entry, host, address);
     }
 
     private static Charset charset(String contentType) {
@@ -486,6 +461,6 @@ public class HttpSampleFetcher {
      * Mask credentials such as {@code token=xxx} in the text of the response.
      */
     private static String mask(String text) {
-        return CredentialRedactor.mask(new CredentialRedactor().redactText(text));
+        return SensitiveData.hideInText(CredentialRedactor.mask(new CredentialRedactor().redactText(text)));
     }
 }

@@ -44,7 +44,8 @@ import {
   SafetyOutlined,
   GroupOutlined,
   CloudServerOutlined,
-  ClusterOutlined
+  ClusterOutlined,
+  ApiOutlined
 } from '@vicons/antd'
 import { useRoute } from 'vue-router'
 import { useUserStore } from '@/store/user/user'
@@ -282,6 +283,11 @@ export function useDataList() {
                   label: t('menu.environment_manage'),
                   key: '/security/environment-manage',
                   icon: renderIcon(EnvironmentOutlined)
+                },
+                {
+                  label: t('menu.seatunnel_connection'),
+                  key: '/security/seatunnel-connection',
+                  icon: renderIcon(ApiOutlined)
                 },
                 {
                   label: t('menu.cluster_manage'),

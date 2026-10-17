@@ -123,8 +123,9 @@ public class HttpSampleFetcherTest {
         Assertions.assertTrue(result.contains("$.data.list[*].status: string, nullable"), result);
         Assertions.assertTrue(result.contains("looks like timestamp yyyy-MM-dd HH:mm:ss"), result);
         Assertions.assertTrue(result.contains("$.data.list[*].tags: array<string> (2 items)"), result);
-        // The value of a sensitive key is masked
-        Assertions.assertTrue(result.contains("$.data.list[*].user.token: string, sample: ******"), result);
+        // The value of a sensitive key is never sent
+        Assertions.assertTrue(result.contains("$.data.list[*].user.token: string, sensitive, secret, value hidden"),
+                result);
         Assertions.assertFalse(result.contains("t0ps3cret"), result);
         Assertions.assertTrue(result.contains("content_field = \"$.data.list.*\""), result);
         Assertions.assertTrue(result.contains("  created_at: string"), result);

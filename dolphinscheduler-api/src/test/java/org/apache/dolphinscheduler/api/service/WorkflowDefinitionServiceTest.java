@@ -39,6 +39,7 @@ import org.apache.dolphinscheduler.api.enums.Status;
 import org.apache.dolphinscheduler.api.exceptions.ServiceException;
 import org.apache.dolphinscheduler.api.service.impl.ProjectServiceImpl;
 import org.apache.dolphinscheduler.api.service.impl.WorkflowDefinitionServiceImpl;
+import org.apache.dolphinscheduler.api.service.seatunnel.SeatunnelConnectionService;
 import org.apache.dolphinscheduler.api.utils.PageInfo;
 import org.apache.dolphinscheduler.api.validator.GlobalParamsValidator;
 import org.apache.dolphinscheduler.common.constants.Constants;
@@ -136,6 +137,10 @@ public class WorkflowDefinitionServiceTest extends BaseServiceTestTool {
                     + "\"taskParams\":{\"resourceList\":[],\"localParams\":[],\"rawScript\":\"echo 2\",\"dependence\":{},\"conditionResult\":{\"successNode\":[],\"failedNode\":[]},\"waitStartTimeout\":{},"
                     + "\"switchResult\":{}},\"flag\":\"YES\",\"taskPriority\":\"MEDIUM\",\"workerGroup\":\"default\",\"failRetryTimes\":0,\"failRetryInterval\":1,\"timeoutFlag\":\"CLOSE\","
                     + "\"timeoutNotifyStrategy\":\"WARN\",\"timeout\":0,\"environmentCode\":-1}]";
+
+    @Mock
+
+    private SeatunnelConnectionService seatunnelConnectionService;
 
     @InjectMocks
     private WorkflowDefinitionServiceImpl workflowDefinitionService;

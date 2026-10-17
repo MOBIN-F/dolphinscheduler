@@ -43,7 +43,7 @@ public class CredentialRedactor {
      */
     private static final Pattern TEXT_VALUE = Pattern.compile(
             "(?i)((?:password|passwd|pwd|secret|token|access[ _]?key|secret[ _]?key|api[ _]?key|密码|口令|密钥)"
-                    + "\\s*(?:is|=|:|：|是|为)\\s*)([^\\s,，;；。\"'`]+)");
+                    + "\\s*(?:is|=|:|：|是|为)\\s*)(\"[^\"\\n]*\"|'[^'\\n]*'|`[^`\\n]*`|“[^”\\n]*”|[^\\s,，;；。]+)");
 
     private static final Pattern PLACEHOLDER = Pattern.compile("\\$\\{_CRED_\\d+_}");
 
@@ -79,9 +79,20 @@ public class CredentialRedactor {
         Matcher matcher = TEXT_VALUE.matcher(redacted);
         StringBuilder result = new StringBuilder();
         while (matcher.find()) {
-            String value = trimUnbalancedClosingBrackets(matcher.group(2));
-            String rest = matcher.group(2).substring(value.length());
-            String replacement = isRedactable(value) ? matcher.group(1) + placeholder(value) + rest : matcher.group();
+            String token = matcher.group(2);
+            String replacement;
+            if (isQuoted(token)) {
+                // 密码是 "a b" keeps the quotes, the value is inside them
+                String value = token.substring(1, token.length() - 1);
+                replacement = isRedactable(value)
+                        ? matcher.group(1) + token.charAt(0) + placeholder(value) + token.charAt(token.length() - 1)
+                        : matcher.group();
+            } else {
+                // A password may contain quotes, e.g. 密码是 Pg"Pa\ss1
+                String value = trimUnbalancedClosingBrackets(token);
+                String rest = token.substring(value.length());
+                replacement = isRedactable(value) ? matcher.group(1) + placeholder(value) + rest : matcher.group();
+            }
             matcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
         }
         matcher.appendTail(result);
@@ -99,6 +110,46 @@ public class CredentialRedactor {
             matcher.appendReplacement(result, Matcher.quoteReplacement(value));
         }
         matcher.appendTail(result);
+        return result.toString();
+    }
+
+    /**
+     * Restore the credentials in a HOCON or JSON config: a value inside a double-quoted string is escaped, a value
+     * outside a string becomes a quoted string, so that a password with quotes or backslashes keeps the config valid.
+     */
+    public String restoreConfig(String config) {
+        if (config == null || valueByPlaceholder.isEmpty()) {
+            return config;
+        }
+        StringBuilder result = new StringBuilder();
+        boolean quoted = false;
+        int i = 0;
+        while (i < config.length()) {
+            char c = config.charAt(i);
+            if (c == '$' && config.startsWith("${_CRED_", i)) {
+                int end = config.indexOf('}', i);
+                String value = end < 0 ? null : valueByPlaceholder.get(config.substring(i, end + 1));
+                if (value != null) {
+                    String escaped = value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
+                            .replace("\r", "\\r").replace("\t", "\\t");
+                    result.append(quoted ? escaped : "\"" + escaped + "\"");
+                    i = end + 1;
+                    continue;
+                }
+            }
+            if (c == '\\' && quoted && i + 1 < config.length()) {
+                result.append(c).append(config.charAt(i + 1));
+                i += 2;
+                continue;
+            }
+            if (c == '"') {
+                quoted = !quoted;
+            } else if (c == '\n') {
+                quoted = false;
+            }
+            result.append(c);
+            i++;
+        }
         return result.toString();
     }
 
@@ -135,6 +186,15 @@ public class CredentialRedactor {
             valueByPlaceholder.put(placeholder, key);
             return placeholder;
         });
+    }
+
+    private static boolean isQuoted(String token) {
+        if (token.length() < 2) {
+            return false;
+        }
+        char first = token.charAt(0);
+        char last = token.charAt(token.length() - 1);
+        return (first == '"' || first == '\'' || first == '`') && last == first || first == '“' && last == '”';
     }
 
     /**

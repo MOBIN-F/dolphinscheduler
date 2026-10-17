@@ -69,6 +69,7 @@ public class AiConversationDaoImpl extends BaseDao<AiConversation, AiConversatio
     private int update(AiConversation conversation) {
         return mybatisMapper.update(null, new UpdateWrapper<AiConversation>().lambda()
                 .set(AiConversation::getMessages, conversation.getMessages())
+                .set(AiConversation::getContext, conversation.getContext())
                 .set(AiConversation::getProjectCode, conversation.getProjectCode())
                 .set(AiConversation::getUpdateUser, conversation.getUpdateUser())
                 .set(AiConversation::getUpdateTime, conversation.getUpdateTime())
